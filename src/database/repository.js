@@ -353,7 +353,7 @@ async function incrementAuraPointsDirect(userId, amount) {
   if (!userId) return null;
   await ensureAuraRow(userId);
   const r = await query(
-    `UPDATE aura SET aura_points = GREATEST(0::bigint, COALESCE(aura_points, 0::bigint) + $2::bigint), updated_at = NOW()
+    `UPDATE aura SET aura_points = COALESCE(aura_points, 0::bigint) + $2::bigint, updated_at = NOW()
      WHERE user_id = $1 RETURNING aura_points`,
     [userId, Number(amount) || 0],
   );
@@ -443,7 +443,7 @@ async function applyAuraDeltaReturningBalance(userId, delta, requiredMinimumBala
 
   const r = await query(
     `UPDATE aura
-     SET aura_points = GREATEST(0::bigint, COALESCE(aura_points, 0::bigint) + $2::bigint),
+     SET aura_points = COALESCE(aura_points, 0::bigint) + $2::bigint,
          updated_at = NOW()
      WHERE user_id = $1
        AND COALESCE(aura_points, 0::bigint) >= $3::bigint

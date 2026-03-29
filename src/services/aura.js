@@ -100,7 +100,9 @@ async function getAuraData(userId) {
   const user = await repo.getUserById(userId);
   if (!user?.aura) return null;
   const aura = user.aura;
-  resetMissionsIfNeeded(aura);
+  if (resetMissionsIfNeeded(aura)) {
+    await repo.updateAura(userId, aura);
+  }
   return aura;
 }
 
@@ -110,13 +112,27 @@ function resetMissionsIfNeeded(aura) {
 
   if (!dm || !dm.lastResetDate) {
     aura.dailyMissions = { lastResetDate: today, drawnMissions: drawMissions(), completedMissionIds: [], progress: {} };
-    return;
+    return true;
   }
 
   const lastDate = toDateStr(dm.lastResetDate);
   if (lastDate !== today) {
     aura.dailyMissions = { lastResetDate: today, drawnMissions: drawMissions(), completedMissionIds: [], progress: {} };
+    return true;
   }
+
+  const drawn = dm.drawnMissions;
+  if (!Array.isArray(drawn) || drawn.length === 0) {
+    aura.dailyMissions = {
+      lastResetDate: today,
+      drawnMissions: drawMissions(),
+      completedMissionIds: [],
+      progress: {},
+    };
+    return true;
+  }
+
+  return false;
 }
 
 async function hasMission(userId, missionId) {
@@ -131,10 +147,13 @@ async function incrementProgress(userId, missionId, amount = 1) {
   if (!user?.aura) return null;
 
   const aura = user.aura;
-  resetMissionsIfNeeded(aura);
+  const missionsReset = resetMissionsIfNeeded(aura);
   const dm = aura.dailyMissions;
   const cfg = MISSIONS[missionId];
-  if (!cfg) return null;
+  if (!cfg) {
+    if (missionsReset) await repo.updateAura(userId, aura);
+    return null;
+  }
 
   const progress = dm.progress || {};
   progress[cfg.key] = (progress[cfg.key] || 0) + amount;
@@ -156,12 +175,18 @@ async function completeMission(userId, missionId) {
   if (!user?.aura) return 0;
 
   const aura = user.aura;
-  resetMissionsIfNeeded(aura);
+  const missionsReset = resetMissionsIfNeeded(aura);
   const dm = aura.dailyMissions;
   const cfg = MISSIONS[missionId];
-  if (!cfg) return 0;
+  if (!cfg) {
+    if (missionsReset) await repo.updateAura(userId, aura);
+    return 0;
+  }
 
-  if ((dm.completedMissionIds || []).includes(missionId)) return 0;
+  if ((dm.completedMissionIds || []).includes(missionId)) {
+    if (missionsReset) await repo.updateAura(userId, aura);
+    return 0;
+  }
 
   dm.completedMissionIds = [...(dm.completedMissionIds || []), missionId];
   aura.auraPoints = (aura.auraPoints || 0) + cfg.reward;

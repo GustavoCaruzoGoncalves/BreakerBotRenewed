@@ -461,7 +461,7 @@ async function auraCommand(sock, msg) {
     return true;
   }
 
-  // !aura missoes
+  // !aura missoes | !aura missões
   if (/^!aura\s+miss[oõ]es\s*$/i.test(text.trim())) {
     const data = await aura.getAuraData(sender);
     if (!data) { await sock.sendMessage(jid, { text: '❌ Você ainda não tem dados de aura.' }, { quoted: raw }); return true; }
