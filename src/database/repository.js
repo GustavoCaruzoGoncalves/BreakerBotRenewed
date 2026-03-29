@@ -761,11 +761,11 @@ async function migrateUserId(oldId, newId, updates = {}) {
 
       // Amigo secreto: conflict-safe
       await client.query(
-        `DELETE FROM amigo_secreto_participants p WHERE p.user_id = $1
-         AND EXISTS (SELECT 1 FROM amigo_secreto_participants p2 WHERE p2.user_id = $2 AND p2.group_id = p.group_id)`,
+        `DELETE FROM amigo_secreto_participantes p WHERE p.user_id = $1
+         AND EXISTS (SELECT 1 FROM amigo_secreto_participantes p2 WHERE p2.user_id = $2 AND p2.group_id = p.group_id)`,
         [oldId, newId],
       );
-      await client.query('UPDATE amigo_secreto_participants SET user_id = $1 WHERE user_id = $2', [newId, oldId]);
+      await client.query('UPDATE amigo_secreto_participantes SET user_id = $1 WHERE user_id = $2', [newId, oldId]);
 
       await client.query(
         `DELETE FROM amigo_secreto_presentes p WHERE p.user_id = $1
@@ -800,7 +800,7 @@ async function migrateUserId(oldId, newId, updates = {}) {
       await client.query('UPDATE aura SET user_id = $1 WHERE user_id = $2', [newId, oldId]);
       await client.query('UPDATE user_badges SET user_id = $1 WHERE user_id = $2', [newId, oldId]);
       await client.query('UPDATE user_level_history SET user_id = $1 WHERE user_id = $2', [newId, oldId]);
-      await client.query('UPDATE amigo_secreto_participants SET user_id = $1 WHERE user_id = $2', [newId, oldId]);
+      await client.query('UPDATE amigo_secreto_participantes SET user_id = $1 WHERE user_id = $2', [newId, oldId]);
       await client.query('UPDATE amigo_secreto_presentes SET user_id = $1 WHERE user_id = $2', [newId, oldId]);
       await client.query('UPDATE amigo_secreto_sorteio SET giver_user_id = $1 WHERE giver_user_id = $2', [newId, oldId]);
       await client.query('UPDATE amigo_secreto_sorteio SET receiver_user_id = $1 WHERE receiver_user_id = $2', [newId, oldId]);
