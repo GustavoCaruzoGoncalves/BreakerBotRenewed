@@ -1,9 +1,11 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { isIgnoredChatJid } = require('../services/users');
 
 const MEDIA_TYPES = new Set(['imageMessage', 'videoMessage', 'stickerMessage']);
 
 function parse(msg) {
   if (!msg?.message || !msg.key?.remoteJid) return null;
+  if (isIgnoredChatJid(msg.key.remoteJid)) return null;
 
   const jid = msg.key.remoteJid;
   const type = Object.keys(msg.message)[0];

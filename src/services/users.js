@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { areJidsSameUser, isJidStatusBroadcast } = require('@whiskeysockets/baileys');
 const repo = require('../database/repository');
 
 const USER_DEFAULTS = {
@@ -64,6 +65,19 @@ function getLidJid(raw) {
     return raw.key.participant?.endsWith('@lid') ? raw.key.participant : null;
   }
   return raw.key.remoteJidAlt || null;
+}
+
+function isIgnoredChatJid(jid) {
+  return isJidStatusBroadcast(jid);
+}
+
+/** Evita persistir o próprio bot (PN em creds.me.id ou LID em creds.me.lid). */
+function isBotUser(sock, resolvedUserId) {
+  if (!resolvedUserId || !sock?.user) return false;
+  const me = sock.user;
+  if (resolvedUserId === me.id) return true;
+  if (me.lid && resolvedUserId === me.lid) return true;
+  return areJidsSameUser(resolvedUserId, me.id);
 }
 
 async function resolveSender(raw) {
@@ -161,6 +175,8 @@ module.exports = {
   findUserKey,
   getSender,
   getLidJid,
+  isIgnoredChatJid,
+  isBotUser,
   resolveSender,
   getPushName,
   resolveTarget,

@@ -68,9 +68,14 @@ async function migratePhantom(phantomId, realUserId, pushName) {
   return true;
 }
 
-async function ensureSender(msg) {
+async function ensureSender(msg, sock) {
+  const key = msg.raw.key;
+  if (key?.fromMe) return;
+  if (users.isIgnoredChatJid(key?.remoteJid)) return;
+
   const userId = await users.resolveSender(msg.raw);
   if (!userId || knownUsers.has(userId)) return;
+  if (users.isBotUser(sock, userId)) return;
 
   const pushName = msg.raw.pushName || null;
   const lidJid = users.getLidJid(msg.raw);
@@ -100,12 +105,14 @@ async function ensureSender(msg) {
 
 async function processXP(sock, msg) {
   if (!msg.text?.trim() || msg.raw.key.fromMe) return;
+  if (users.isIgnoredChatJid(msg.jid)) return;
 
   const msgId = msg.raw.key?.id || `${msg.jid}_${msg.raw.messageTimestamp || Date.now()}`;
   if (level.msgAlreadyProcessed(msgId)) return;
 
   const userId = await users.resolveSender(msg.raw);
   if (!userId) return;
+  if (users.isBotUser(sock, userId)) return;
 
   const result = await level.processMessage(userId);
   if (!result?.isLevelUp) return;
@@ -151,7 +158,7 @@ async function processXP(sock, msg) {
 // --- Main handler ---
 
 async function handle(sock, msg) {
-  await ensureSender(msg);
+  await ensureSender(msg, sock);
 
   processXP(sock, msg).catch(err => console.error('[XP] Erro:', err.message));
   auraCommand.processAuraMissions(sock, msg).catch(err => console.error('[AURA-MISSION] Erro:', err.message));
