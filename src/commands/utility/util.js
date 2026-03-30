@@ -23,7 +23,7 @@ const MENU = `📌 *Menu de Comandos*
 • *!play* / *!playmp4* — Áudio ou vídeo do YouTube
 
 🤪 *Zueiras*
-• *!ship*, *!gay*, *!corno*, *!hetero*, *!chato*, *!petista*, *!bolsonarista*, *!leitada*, *!burro*, *!fazol* …
+• *!ship*, *!gay*, *!corno*, *!hetero*, *!chato*, *!petista*, *!bolsonaro*, *!leitada*, *!burro*, *!fazol* …
 • *!pfp* — Foto de perfil
 • *!trivia* — Quiz (*!trivia start*, *!trivia resposta …*)
 • *!amigoSecreto* — Amigo secreto
