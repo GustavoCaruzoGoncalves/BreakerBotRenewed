@@ -167,6 +167,13 @@ async function handle(sock, msg) {
   auraCommand.processAuraSticker(sock, msg).catch(err => console.error('[AURA-STICKER] Erro:', err.message));
   auraSvc.trySpawnEvent(sock, msg.jid).catch(() => {});
 
+  if (msg.text?.trim() && !msg.raw.key.fromMe) {
+    const msgType = Object.keys(msg.raw.message || {})[0];
+    if (msgType !== 'reactionMessage') {
+      jokesCommand.handleEmojiReaction(sock, msg).catch(() => {});
+    }
+  }
+
   const cmd = extractCommand(msg.text);
   if (!cmd) return;
 

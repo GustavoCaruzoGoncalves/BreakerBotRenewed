@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const mentions = require('../../lib/mentions');
 const repo = require('../../database/repository');
+const users = require('../../services/users');
 const config = require('../../config');
 
 const ASSETS = path.resolve(__dirname, '..', '..', '..', 'assets');
@@ -41,23 +42,21 @@ function isPedraoNumber(jid) {
 }
 
 // --- Emoji reaction (auto-react) ---
+// Chamado pelo router em toda mensagem com texto (não só em comandos !).
 
 async function handleEmojiReaction(sock, msg) {
-  const sender = msg.jid.endsWith('@g.us')
-    ? (msg.raw.key.participantAlt || msg.raw.key.participant || msg.jid)
-    : msg.jid;
+  if (msg.raw.key.fromMe) return;
+  if (users.isIgnoredChatJid(msg.jid)) return;
+  const type = Object.keys(msg.raw.message || {})[0];
+  if (type === 'reactionMessage') return;
 
-  const usersData = await repo.getAllUsers().catch(() => ({}));
-  let userConfig = usersData[sender];
-  if (!userConfig) {
-    for (const [, u] of Object.entries(usersData)) {
-      if (u.jid === sender) { userConfig = u; break; }
-    }
-  }
+  const userId = await users.resolveSender(msg.raw);
+  if (!userId) return;
 
-  if (userConfig?.emojiReaction && userConfig?.emoji) {
-    await sock.sendMessage(msg.jid, { react: { text: userConfig.emoji, key: msg.raw.key } }).catch(() => {});
-  }
+  const user = await repo.getUserById(userId);
+  if (!user?.emojiReaction || !user?.emoji) return;
+
+  await sock.sendMessage(msg.jid, { react: { text: user.emoji, key: msg.raw.key } }).catch(() => {});
 }
 
 // --- Generic percentage command handler ---
@@ -347,8 +346,6 @@ async function jokesCommand(sock, msg) {
   const { text, raw } = msg;
   if (!text || raw.key.fromMe || Object.keys(raw.message)[0] === 'reactionMessage') return;
 
-  handleEmojiReaction(sock, msg).catch(() => {});
-
   if (checkPedraoGreeting(text)) {
     await sendPedraoSticker(sock, msg);
     await sock.sendMessage(msg.jid, { text: 'O PERDÃO JÁ LEVOU 100% DA LEITADA KKKKKKKKKKKKKKKKK' }, { quoted: raw });
@@ -373,3 +370,4 @@ async function jokesCommand(sock, msg) {
 }
 
 module.exports = jokesCommand;
+module.exports.handleEmojiReaction = handleEmojiReaction;
