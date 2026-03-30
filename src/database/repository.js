@@ -439,7 +439,23 @@ async function applyAuraDeltaReturningBalance(userId, delta, requiredMinimumBala
   if (!userId) return { ok: false, reason: 'invalid_user', balance: null };
 
   const amt = Math.floor(Number(delta) || 0);
+  const minBal = Math.floor(Number(requiredMinimumBalance) || 0);
   await ensureAuraRow(userId);
+
+  if (minBal === 0) {
+    const r = await query(
+      `UPDATE aura
+       SET aura_points = COALESCE(aura_points, 0::bigint) + $2::bigint,
+           updated_at = NOW()
+       WHERE user_id = $1
+       RETURNING aura_points`,
+      [userId, amt],
+    );
+    if (r.rowCount === 0) {
+      return { ok: false, reason: 'update_failed', balance: null };
+    }
+    return { ok: true, reason: 'ok', balance: Number(r.rows[0].aura_points) };
+  }
 
   const r = await query(
     `UPDATE aura
@@ -448,7 +464,7 @@ async function applyAuraDeltaReturningBalance(userId, delta, requiredMinimumBala
      WHERE user_id = $1
        AND COALESCE(aura_points, 0::bigint) >= $3::bigint
      RETURNING aura_points`,
-    [userId, amt, Math.floor(Number(requiredMinimumBalance) || 0)],
+    [userId, amt, minBal],
   );
 
   if (r.rowCount === 0) {
