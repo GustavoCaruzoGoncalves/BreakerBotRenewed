@@ -14,7 +14,7 @@ const PERCENT_CMDS = {
   '!hetero':        { emoji: '🩲',            label: 'hétero' },
   '!chato':         { emoji: '😡',            label: 'chato' },
   '!petista':       { emoji: '🚩🚩🚩',       label: 'petista' },
-  '!bolsonarista':  { emoji: '🇧🇷🇧🇷🇧🇷', label: 'bolsonarista' },
+  '!bolsonarista':  { emoji: '🇧🇷🇧🇷🇧🇷', label: 'bolsonaro' },
   '!leitada':       { emoji: '🥛🥛🥛',       label: 'de leitada', verb: 'levou' },
   '!burro':         { emoji: '🫏🫏🫏',       label: 'burro' },
 };
