@@ -527,12 +527,22 @@ async function resolveCanonicalUserId(key) {
   if (alt?.endsWith('@s.whatsapp.net')) return alt;
 
   const part = key.participant;
+  if (part?.endsWith('@s.whatsapp.net')) return part;
+
   if (part?.endsWith('@lid')) {
     const resolved = await findUserIdByJid(part);
     if (resolved) return resolved;
+    return part;
   }
 
-  return alt || part || key.remoteJid;
+  if (alt?.endsWith('@lid')) {
+    const resolved = await findUserIdByJid(alt);
+    if (resolved) return resolved;
+    return alt;
+  }
+
+  // Sem participante identificável: não usar remoteJid (é o @g.us do grupo).
+  return null;
 }
 
 // --- Rankings ---

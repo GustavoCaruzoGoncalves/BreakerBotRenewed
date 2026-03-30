@@ -75,6 +75,7 @@ async function ensureSender(msg, sock) {
 
   const userId = await users.resolveSender(msg.raw);
   if (!userId || knownUsers.has(userId)) return;
+  if (users.isGroupUserId(userId)) return;
   if (users.isBotUser(sock, userId)) return;
 
   const pushName = msg.raw.pushName || null;
@@ -112,6 +113,7 @@ async function processXP(sock, msg) {
 
   const userId = await users.resolveSender(msg.raw);
   if (!userId) return;
+  if (users.isGroupUserId(userId)) return;
   if (users.isBotUser(sock, userId)) return;
 
   const result = await level.processMessage(userId);

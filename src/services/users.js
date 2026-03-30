@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { areJidsSameUser, isJidStatusBroadcast } = require('@whiskeysockets/baileys');
+const { areJidsSameUser, isJidStatusBroadcast, isJidGroup } = require('@whiskeysockets/baileys');
 const repo = require('../database/repository');
 
 const USER_DEFAULTS = {
@@ -69,6 +69,11 @@ function getLidJid(raw) {
 
 function isIgnoredChatJid(jid) {
   return isJidStatusBroadcast(jid);
+}
+
+/** Grupo WhatsApp não é entidade de usuário na tabela users. */
+function isGroupUserId(userId) {
+  return typeof userId === 'string' && isJidGroup(userId);
 }
 
 /** Evita persistir o próprio bot (PN em creds.me.id ou LID em creds.me.lid). */
@@ -176,6 +181,7 @@ module.exports = {
   getSender,
   getLidJid,
   isIgnoredChatJid,
+  isGroupUserId,
   isBotUser,
   resolveSender,
   getPushName,
