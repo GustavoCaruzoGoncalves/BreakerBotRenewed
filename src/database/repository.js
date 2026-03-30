@@ -484,7 +484,28 @@ async function resolveCanonicalUserId(key) {
   if (!key?.remoteJid) return null;
   const isGroup = key.remoteJid.endsWith('@g.us');
 
-  if (!isGroup) return key.remoteJid;
+  if (!isGroup) {
+    const rjid = key.remoteJid;
+    const partAlt = key.participantAlt;
+    if (partAlt?.endsWith('@s.whatsapp.net')) return partAlt;
+    const rAlt = key.remoteJidAlt;
+    if (rAlt?.endsWith('@s.whatsapp.net')) return rAlt;
+    if (rjid.endsWith('@s.whatsapp.net')) return rjid;
+
+    const byRemote = await findUserByJid(rjid);
+    if (byRemote) return byRemote;
+    if (rAlt) {
+      const byAlt = await findUserByJid(rAlt);
+      if (byAlt) return byAlt;
+    }
+    const byJidCol = await findUserIdByJid(rjid);
+    if (byJidCol) return byJidCol;
+    if (rAlt) {
+      const byJidAlt = await findUserIdByJid(rAlt);
+      if (byJidAlt) return byJidAlt;
+    }
+    return rjid;
+  }
 
   const alt = key.participantAlt;
   if (alt?.endsWith('@s.whatsapp.net')) return alt;
