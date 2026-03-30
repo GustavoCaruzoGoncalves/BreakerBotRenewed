@@ -156,12 +156,12 @@ async function incrementProgress(userId, missionId, amount = 1) {
   }
 
   const progress = dm.progress || {};
-  progress[cfg.key] = (progress[cfg.key] || 0) + amount;
+  progress[cfg.key] = (Number(progress[cfg.key]) || 0) + amount;
   dm.progress = progress;
 
   if (progress[cfg.key] >= cfg.target && !(dm.completedMissionIds || []).includes(missionId)) {
     dm.completedMissionIds = [...(dm.completedMissionIds || []), missionId];
-    aura.auraPoints = (aura.auraPoints || 0) + cfg.reward;
+    aura.auraPoints = (Number(aura.auraPoints) || 0) + cfg.reward;
     await repo.updateAura(userId, aura);
     return { completed: missionId, reward: cfg.reward };
   }
@@ -189,7 +189,7 @@ async function completeMission(userId, missionId) {
   }
 
   dm.completedMissionIds = [...(dm.completedMissionIds || []), missionId];
-  aura.auraPoints = (aura.auraPoints || 0) + cfg.reward;
+  aura.auraPoints = (Number(aura.auraPoints) || 0) + cfg.reward;
   await repo.updateAura(userId, aura);
   return cfg.reward;
 }

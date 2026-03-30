@@ -28,7 +28,7 @@ function rowToUser(row, auraRow, dmRow, badges = [], levelHistory = []) {
   };
   if (auraRow) {
     user.aura = {
-      auraPoints: auraRow.aura_points ?? 0,
+      auraPoints: Number(auraRow.aura_points) || 0,
       stickerHash: auraRow.sticker_hash ?? null,
       stickerDataUrl: auraRow.sticker_data_url ?? null,
       character: auraRow.character ?? null,
