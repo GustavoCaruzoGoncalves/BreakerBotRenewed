@@ -6,7 +6,7 @@ const config = require('./config');
 const { logError } = require('./lib/logger');
 const { parse } = require('./lib/message');
 const { handle, handleReaction } = require('./router');
-const { startAuthMessageProcessor } = require('./services/authMessageSender');
+const { startAuthMessageProcessor, registerSocket, clearSocket } = require('./services/authMessageSender');
 
 const AUTH_DIR = path.resolve(__dirname, '..', 'auth_info');
 
@@ -34,6 +34,7 @@ async function connect() {
     }
 
     if (connection === 'close') {
+      clearSocket();
       const code = lastDisconnect?.error?.output?.statusCode;
       const streamErr = lastDisconnect?.error?.message?.includes('Stream Errored');
       console.log(`Conexão fechada (code=${code}, stream=${streamErr})`);
@@ -48,7 +49,8 @@ async function connect() {
 
     if (connection === 'open') {
       console.log('Bot conectado!');
-      startAuthMessageProcessor(sock);
+      registerSocket(sock);
+      startAuthMessageProcessor();
     }
   });
 

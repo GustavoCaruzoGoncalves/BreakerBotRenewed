@@ -62,7 +62,7 @@ async function handleEmojiReaction(sock, msg) {
 // --- Generic percentage command handler ---
 
 async function handlePercentCmd(sock, msg, cmd, { emoji, label, verb }) {
-  const isLeitada = cmd === '!leitada';
+  const isLeitada = cmd === '!leitada'; 
   const action = verb || 'é';
   const mentionedJid = msg.raw.message?.extendedTextMessage?.contextInfo?.mentionedJid;
 

@@ -6,16 +6,32 @@ const FIRST_RUN_MS = 3000;
 const POLL_MS = 2000;
 
 let busy = false;
+let currentSock = null;
+let pollStarted = false;
+
+function registerSocket(sock) {
+  currentSock = sock;
+  setImmediate(() => {
+    processPendingAuthMessages().catch(() => {});
+  });
+}
+
+function clearSocket() {
+  currentSock = null;
+}
 
 function socketReady(sock) {
   try {
-    return !!(sock?.user && typeof sock.sendMessage === 'function');
+    if (!sock?.user || typeof sock.sendMessage !== 'function') return false;
+    if (sock.ws && typeof sock.ws.isOpen === 'boolean' && !sock.ws.isOpen) return false;
+    return true;
   } catch {
     return false;
   }
 }
 
-async function processPendingAuthMessages(sock) {
+async function processPendingAuthMessages() {
+  const sock = currentSock;
   if (busy) return;
   busy = true;
   try {
@@ -61,10 +77,17 @@ async function processPendingAuthMessages(sock) {
   }
 }
 
-function startAuthMessageProcessor(sock) {
-  setTimeout(() => processPendingAuthMessages(sock), FIRST_RUN_MS);
-  setInterval(() => processPendingAuthMessages(sock), POLL_MS);
+function startAuthMessageProcessor() {
+  if (pollStarted) return;
+  pollStarted = true;
+  setTimeout(() => processPendingAuthMessages(), FIRST_RUN_MS);
+  setInterval(() => processPendingAuthMessages(), POLL_MS);
   console.log('[Auth] Processador de mensagens de autenticação iniciado');
 }
 
-module.exports = { startAuthMessageProcessor, processPendingAuthMessages };
+module.exports = {
+  registerSocket,
+  clearSocket,
+  startAuthMessageProcessor,
+  processPendingAuthMessages,
+};
