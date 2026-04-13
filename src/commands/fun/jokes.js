@@ -5,6 +5,9 @@ const repo = require('../../database/repository');
 const users = require('../../services/users');
 const config = require('../../config');
 
+// importando os comandos do guh
+const handleAindaNamora = require('./olhodopai');
+
 const ASSETS = path.resolve(__dirname, '..', '..', '..', 'assets');
 
 // --- Config tables (replaces 500+ lines of duplicated handlers) ---
@@ -367,6 +370,10 @@ async function jokesCommand(sock, msg) {
   if (lower.startsWith('!fazol')) return handleFazol(sock, msg);
   if (text.startsWith('!vumvum')) return handleVumvum(sock, msg);
   if (text.startsWith('!rankingGay')) return handleRankingGay(sock, msg);
+ 
+  if (text.toLowerCase().startsWith('!aindanamora')) {
+  return handleAindaNamora(sock, msg);
+}
 }
 
 module.exports = jokesCommand;
