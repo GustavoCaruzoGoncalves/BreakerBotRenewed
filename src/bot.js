@@ -1,4 +1,4 @@
-const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const path = require('path');
@@ -14,10 +14,13 @@ const contactsCache = {};
 
 async function connect() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  const { version } = await fetchLatestBaileysVersion().catch(() => ({
+    version: config.baileys.version,
+  }));
 
   const sock = makeWASocket({
     printQRInTerminal: false,
-    version: config.baileys.version,
+    version,
     auth: state,
     browser: config.baileys.browser,
     logger: pino({ level: 'silent' }),

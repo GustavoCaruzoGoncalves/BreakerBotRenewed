@@ -14,7 +14,8 @@ module.exports = {
     .filter(Boolean)
     .map(n => `${n}@s.whatsapp.net`),
   baileys: {
-    version: [2, 3000, 1033893291],
-    browser: ['Windows', 'Google Chrome', '145.0.0'],
+    // Fallback se fetchLatestBaileysVersion falhar; o bot.js busca a versão atual em runtime.
+    version: [2, 3000, 1035194821],
+    browser: ['Mac OS', 'Safari', '18.0'],
   },
 };
