@@ -88,7 +88,7 @@ export function formatMentionTag(jid: string): string {
 
 export function formatPlayerMention(
   player: SeatPlayer,
-  resolveJid: (seat: SeatPlayer) => string = (s) => s.whatsappJid,
+  resolveJid: (seat: SeatPlayer) => string = (s) => s.userId,
 ): string {
   return formatMentionTag(resolveJid(player));
 }
@@ -175,7 +175,7 @@ export function formatMesa(state: MatchState): string {
         msg += `  Jogada ${r.roundNumber}: empate\n`;
       } else {
         const p = state.seats.find((s) => s.seat === r.winnerSeat)!;
-        msg += `  Jogada ${r.roundNumber}: ${p.displayName}\n`;
+        msg += `  Jogada ${r.roundNumber}: ${formatPlayerMention(p)}\n`;
       }
     }
   }
@@ -209,13 +209,30 @@ export function formatHistory(state: MatchState): string {
   let msg = '📜 Histórico da partida\n\n';
   for (const h of state.currentHand.history) {
     const cardStr = h.hidden || !h.card ? '🂠' : cardToString(h.card);
-    msg += `Jogada ${h.round} — ${h.displayName}: ${cardStr}\n`;
+    const player = state.seats.find((s) => s.seat === h.seat);
+    const name = player ? formatPlayerMention(player) : h.displayName;
+    msg += `Jogada ${h.round} — ${name}: ${cardStr}\n`;
   }
   return msg;
 }
 
 export function getMentionJids(seats: SeatPlayer[]): string[] {
-  return seats.map((s) => s.whatsappJid);
+  return seats.map((s) => s.userId);
+}
+
+function lobbySlotLabel(slot: {
+  userId: string | null;
+  reservedForUserId: string | null;
+}): string {
+  if (slot.userId) return `@${slot.userId.split('@')[0]}`;
+  if (slot.reservedForUserId) return `(reservado @${slot.reservedForUserId.split('@')[0]})`;
+  return '(vago)';
+}
+
+export function getLobbyMentionJids(lobby: {
+  slots: { userId: string | null }[];
+}): string[] {
+  return lobby.slots.flatMap((s) => (s.userId ? [s.userId] : []));
 }
 
 export function formatPointsLabel(points: number): string {
@@ -226,7 +243,7 @@ export function formatRunRefusedMessage(
   state: MatchState,
   winnerTeam: TeamId,
   points: number,
-  resolveJid: (seat: SeatPlayer) => string = (s) => s.whatsappJid,
+  resolveJid: (seat: SeatPlayer) => string = (s) => s.userId,
 ): string {
   const outcome = formatTeamOutcome(
     state.mode,
@@ -240,7 +257,7 @@ export function formatRunRefusedMessage(
 
 export function formatHandStartedMessage(
   state: MatchState,
-  resolveJid: (seat: SeatPlayer) => string = (s) => s.whatsappJid,
+  resolveJid: (seat: SeatPlayer) => string = (s) => s.userId,
   suitSymbol: (s: string) => string = (s) => s,
 ): string {
   const hand = state.currentHand!;
@@ -261,7 +278,7 @@ export function formatMaoOnzeRunMessage(
   opponentTeam: TeamId,
   points: number,
   scores: [number, number],
-  resolveJid: (seat: SeatPlayer) => string = (s) => s.whatsappJid,
+  resolveJid: (seat: SeatPlayer) => string = (s) => s.userId,
 ): string {
   const runner = formatTeamOutcome(
     state.mode,
@@ -286,7 +303,7 @@ export function formatMaoOnzeTimeoutMessage(
   opponentTeam: TeamId,
   points: number,
   redelMaoOnze: boolean,
-  resolveJid: (seat: SeatPlayer) => string = (s) => s.whatsappJid,
+  resolveJid: (seat: SeatPlayer) => string = (s) => s.userId,
 ): string {
   const deciders = formatTeamOutcome(
     state.mode,
@@ -330,7 +347,7 @@ export function formatRaiseRequestMessage(
   state: MatchState,
   level: RaiseLevel,
   requestingTeam: TeamId,
-  resolveJid: (seat: SeatPlayer) => string = (s) => s.whatsappJid,
+  resolveJid: (seat: SeatPlayer) => string = (s) => s.userId,
 ): string {
   const requester = formatSideLabel(state.mode, requestingTeam, state.seats, resolveJid);
   const name = handValueLabel(level);
@@ -350,7 +367,7 @@ export function formatRaiseRequestMessage(
 export function formatRaiseAcceptedMessage(
   state: MatchState,
   newValue: HandValue,
-  resolveJid: (seat: SeatPlayer) => string = (s) => s.whatsappJid,
+  resolveJid: (seat: SeatPlayer) => string = (s) => s.userId,
 ): string {
   let msg = `✅ Aceito! Rodada valendo ${formatPointsLabel(newValue)}.`;
 
@@ -404,13 +421,14 @@ export function formatLobbyMessage(lobby: {
   slots: {
     seat: number;
     team: TeamId;
+    userId: string | null;
     displayName: string | null;
     reservedForUserId: string | null;
   }[];
 }): string {
   const lines = lobby.slots.map((s) => {
     const team = s.team === 0 ? 'A' : 'B';
-    const name = s.displayName ?? (s.reservedForUserId ? '(reservado)' : '(vago)');
+    const name = lobbySlotLabel(s);
     if (lobby.mode === '1v1') {
       return `  Assento ${s.seat + 1}: ${name}`;
     }

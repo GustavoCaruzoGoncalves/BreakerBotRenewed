@@ -91,13 +91,17 @@ async function buildSeats2v2(
 function debugHelpText(): string {
   return (
     `🔧 Comandos de debug (admin)\n\n` +
-    `!debug maodeferro @oponente — 1v1 em 11×11 (Mão de Ferro)\n` +
-    `!debug maoonze @oponente — 1v1 com você em 11 pts (Mão de Onze)\n` +
-    `!debug normal @oponente — 1v1 do zero (0×0)\n` +
-    `!debug placar 10 9 @oponente — 1v1 com placar customizado\n` +
-    `!debug 2v2 @parceiro @adv1 @adv2 — dupla com placar 0×0\n` +
-    `!debug 2v2ferro @parceiro @adv1 @adv2 — 2v2 em 11×11\n` +
-    `!debug reset — cancela partida de teste no grupo`
+    `!debugTruco help — esta lista\n\n` +
+    `1v1 (marque @oponente):\n` +
+    `• !debugTruco maodeferro — 11×11 (Mão de Ferro)\n` +
+    `• !debugTruco maoonze — você com 11 pts (Mão de Onze)\n` +
+    `• !debugTruco normal — 0×0\n` +
+    `• !debugTruco placar 10 9 — placar customizado (0–11)\n\n` +
+    `2v2 (marque @parceiro @adv1 @adv2):\n` +
+    `• !debugTruco 2v2 — 0×0\n` +
+    `• !debugTruco 2v2ferro — 11×11 (Mão de Ferro)\n` +
+    `• !debugTruco 2v2onze — 11×8 (Mão de Onze)\n\n` +
+    `• !debugTruco reset — cancela a partida de teste no grupo`
   );
 }
 
@@ -107,7 +111,7 @@ async function start1v1(
   label: string,
 ): Promise<TrucoResponse> {
   const mentions = ctx.mentionedUserIds;
-  if (mentions.length < 1) return err('❌ Marque 1 jogador(es): !debug ... @oponente');
+  if (mentions.length < 1) return err('❌ Marque 1 jogador: !debugTruco ... @oponente');
 
   const seats = await buildSeats1v1(ctx, mentions[0]);
   return startDebugMatch(ctx, '1v1', seats, scores, label);
@@ -119,7 +123,7 @@ async function start2v2(
   label: string,
 ): Promise<TrucoResponse> {
   const mentions = ctx.mentionedUserIds;
-  if (mentions.length < 3) return err('❌ Marque 3 jogador(es): !debug 2v2 @parceiro @adv1 @adv2');
+  if (mentions.length < 3) return err('❌ Marque 3 jogadores: !debugTruco 2v2 @parceiro @adv1 @adv2');
 
   const seats = await buildSeats2v2(ctx, mentions[0], [mentions[1], mentions[2]]);
   return startDebugMatch(ctx, '2v2', seats, scores, label);
@@ -127,7 +131,7 @@ async function start2v2(
 
 export async function handleDebug(ctx: TrucoContext, args: string[]): Promise<TrucoResponse> {
   if (!isTrucoAdmin(ctx)) {
-    return err('❌ Apenas administradores podem usar !debug.');
+    return err('❌ Apenas administradores podem usar !debugTruco.');
   }
 
   const sub = args[0]?.toLowerCase();
@@ -159,7 +163,7 @@ export async function handleDebug(ctx: TrucoContext, args: string[]): Promise<Tr
     const a = Number(args[1]);
     const b = Number(args[2]);
     if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a > 11 || b > 11) {
-      return err('❌ Placar inválido. Use: !debug placar 10 9 @oponente (0–11).');
+      return err('❌ Placar inválido. Use: !debugTruco placar 10 9 @oponente (0–11).');
     }
     return start1v1(ctx, [a, b], `Placar ${a}×${b} — partida de teste iniciada.`);
   }
@@ -176,5 +180,5 @@ export async function handleDebug(ctx: TrucoContext, args: string[]): Promise<Tr
     return start2v2(ctx, [11, 8], '2×2 Mão de Onze (11×8) — partida de teste iniciada.');
   }
 
-  return err('❌ Cenário desconhecido. Use !debug help');
+  return err('❌ Cenário desconhecido. Use !debugTruco help');
 }

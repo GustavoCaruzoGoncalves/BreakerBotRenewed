@@ -256,7 +256,7 @@ async function dispatch(
     case 'trucoajuda':
       return textResponse(helpText());
 
-    case 'debug':
+    case 'debugtruco':
       return handleDebug(ctx, args);
 
     default:
@@ -286,7 +286,7 @@ const TRIGGERS = new Set([
   'rankingtruco',
   'regras',
   'trucoajuda',
-  'debug',
+  'debugtruco',
 ]);
 
 const trucoCommand: Command = {
@@ -359,11 +359,11 @@ const trucoCommand: Command = {
       { trigger: '!regras', description: 'Regras do Truco Paulista', groupOnly: true },
       { trigger: '!trucoajuda', description: 'Lista os comandos do Truco', groupOnly: true },
       {
-        trigger: '!debug',
-        description: 'Cenários de teste do Truco',
+        trigger: '!debugTruco',
+        description: 'Cenários de teste do Truco (admin)',
         admin: true,
         groupOnly: true,
-        usages: [{ syntax: '!debug help', description: 'Lista os cenários disponíveis' }],
+        usages: [{ syntax: '!debugTruco help', description: 'Lista os cenários disponíveis' }],
       },
     ],
   },

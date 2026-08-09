@@ -54,11 +54,7 @@ export interface DisplayNameInfo {
   hasPushName: boolean;
 }
 
-export async function getUserDisplayName(jid: string | null | undefined): Promise<DisplayNameInfo> {
-  if (!jid) return { displayName: null, hasCustomName: false, hasPushName: false };
-  const usersData = await repo.getAllUsers().catch(() => ({}) as UsersMap);
-  const user = resolveUser(usersData, jid);
-
+function displayNameOf(user: User | null): DisplayNameInfo {
   if (user?.customNameEnabled && user.customName) {
     return { displayName: user.customName, hasCustomName: true, hasPushName: false };
   }
@@ -66,6 +62,12 @@ export async function getUserDisplayName(jid: string | null | undefined): Promis
     return { displayName: user.pushName, hasCustomName: false, hasPushName: true };
   }
   return { displayName: null, hasCustomName: false, hasPushName: false };
+}
+
+export async function getUserDisplayName(jid: string | null | undefined): Promise<DisplayNameInfo> {
+  if (!jid) return { displayName: null, hasCustomName: false, hasPushName: false };
+  const usersData = await repo.getAllUsers().catch(() => ({}) as UsersMap);
+  return displayNameOf(resolveUser(usersData, jid));
 }
 
 export async function getPushName(jid: string): Promise<string> {
@@ -86,12 +88,13 @@ export interface MentionInfo {
   hasCustomName: boolean;
 }
 
-export async function processSingleMention(jid: string): Promise<MentionInfo> {
-  const canMention = await canMentionUser(jid);
-  const nameInfo = await getUserDisplayName(jid);
+function buildMentionInfo(usersData: UsersMap, globalEnabled: boolean, jid: string): MentionInfo {
+  const key = findUserKey(usersData, jid) || jid;
+  const user = resolveUser(usersData, jid);
+  const nameInfo = displayNameOf(user);
+  const canMention = globalEnabled && user?.allowMentions === true;
   const hasName = Boolean(nameInfo.displayName?.trim());
-  const mentions = canMention ? [jid] : [];
-  const handle = jid.split('@')[0] ?? jid;
+  const handle = key.split('@')[0] ?? key;
 
   let mentionText: string;
   if (canMention) {
@@ -100,9 +103,92 @@ export async function processSingleMention(jid: string): Promise<MentionInfo> {
     mentionText = hasName && nameInfo.displayName ? nameInfo.displayName : 'O usuário mencionado';
   }
 
-  return { canMention, mentionText, mentions, hasName, hasCustomName: nameInfo.hasCustomName };
+  return {
+    canMention,
+    mentionText,
+    mentions: canMention ? [key] : [],
+    hasName,
+    hasCustomName: nameInfo.hasCustomName,
+  };
+}
+
+export async function processSingleMention(jid: string): Promise<MentionInfo> {
+  const [usersData, globalEnabled] = await Promise.all([getUsersData(), getMentionsEnabled()]);
+  return buildMentionInfo(usersData, globalEnabled, jid);
 }
 
 export async function getUsersData(): Promise<UsersMap> {
   return repo.getAllUsers().catch(() => ({}) as UsersMap);
+}
+
+function handleOf(jid: string | null | undefined): string | null {
+  const handle = jid?.split('@')[0]?.split(':')[0];
+  return handle || null;
+}
+
+/** Índice `handle -> usuário` para reconhecer os `@numero` já escritos no texto. */
+function indexByHandle(usersData: UsersMap): Map<string, User> {
+  const index = new Map<string, User>();
+  for (const [key, user] of Object.entries(usersData)) {
+    for (const candidate of [key, user.jid]) {
+      const handle = handleOf(candidate);
+      if (handle && !index.has(handle)) index.set(handle, user);
+    }
+  }
+  return index;
+}
+
+export interface RenderedMessage {
+  text: string;
+  mentions: string[];
+}
+
+export interface MentionRenderer {
+  /**
+   * `pingJids` são os candidatos a marcação; quem não permite menções sai da
+   * lista e vira texto simples.
+   */
+  render(text: string, pingJids?: readonly string[]): RenderedMessage;
+}
+
+/**
+ * Carrega as preferências uma única vez e devolve um renderizador síncrono, para
+ * que uma resposta com várias mensagens não releia a tabela de usuários a cada uma.
+ */
+export async function createMentionRenderer(): Promise<MentionRenderer> {
+  const [usersData, globalEnabled] = await Promise.all([getUsersData(), getMentionsEnabled()]);
+  const byHandle = indexByHandle(usersData);
+
+  return {
+    render(text, pingJids = []) {
+      const mentions = [...new Set(pingJids.map((jid) => findUserKey(usersData, jid) || jid))].filter(
+        (jid) => globalEnabled && resolveUser(usersData, jid)?.allowMentions === true,
+      );
+
+      if (!text.includes('@')) return { text, mentions };
+
+      const rendered = text.replace(/@(\d+)/g, (tag, handle: string) => {
+        const user = byHandle.get(handle);
+        if (!user) return tag;
+
+        const nameInfo = displayNameOf(user);
+        if (globalEnabled && user.allowMentions) {
+          return nameInfo.hasCustomName ? `${tag} (${nameInfo.displayName})` : tag;
+        }
+        // Sem nome conhecido o `@numero` fica como está: já não marca ninguém,
+        // porque o JID não entra em `mentions`.
+        return nameInfo.displayName?.trim() || tag;
+      });
+
+      return { text: rendered, mentions };
+    },
+  };
+}
+
+export async function applyMentionRules(
+  text: string,
+  pingJids: readonly string[] = [],
+): Promise<RenderedMessage> {
+  const renderer = await createMentionRenderer();
+  return renderer.render(text, pingJids);
 }

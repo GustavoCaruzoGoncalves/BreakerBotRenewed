@@ -1,5 +1,6 @@
 import { config } from '../../config.js';
 import * as repo from '../../database/repository.js';
+import { applyMentionRules } from '../../lib/mentions.js';
 import type { AmigoSecretoMap, UsersMap } from '../../database/types.js';
 import type { BotMessage, Command, CommandHandler, WASocket } from '../../types/bot.js';
 
@@ -299,14 +300,11 @@ async function handleListaPresente(
     try {
       const meta = await sock.groupMetadata(groupId);
       const list = buildGiftList(group.participantes, group.presentes || {});
-      await sock.sendMessage(
-        chatId,
-        {
-          text: `📋 *Lista de Presentes - ${meta.subject}*\n\n${list.text}`,
-          mentions: list.mentions,
-        },
-        { quoted: msg.raw },
+      const rendered = await applyMentionRules(
+        `📋 *Lista de Presentes - ${meta.subject}*\n\n${list.text}`,
+        list.mentions,
       );
+      await sock.sendMessage(chatId, rendered, { quoted: msg.raw });
     } catch (e) {
       console.error('Erro dados grupo:', e);
       await sock.sendMessage(
@@ -338,11 +336,11 @@ async function handleListaPresente(
     return;
   }
   const list = buildGiftList(group.participantes, group.presentes || {});
-  await sock.sendMessage(
-    chatId,
-    { text: `📋 *Lista de Presentes*\n\n${list.text}`, mentions: list.mentions },
-    { quoted: msg.raw },
+  const rendered = await applyMentionRules(
+    `📋 *Lista de Presentes*\n\n${list.text}`,
+    list.mentions,
   );
+  await sock.sendMessage(chatId, rendered, { quoted: msg.raw });
 }
 
 // --- Main handler ---
@@ -464,13 +462,10 @@ const handle: CommandHandler = async (sock, msg) => {
 
     let confirm = `✅ *Participantes adicionados ao Amigo Secreto!*\n\n📋 *Total:* ${unique.length}\n\n👥 *Participantes:*\n`;
     unique.forEach((participantJid, i) => {
-      const num = participantJid.split('@')[0];
-      const nome = nomes[participantJid];
-      const hasReal = nome && nome.trim() && nome !== num;
-      confirm += `${i + 1}. ${hasReal ? `${nome} (@${num})` : `@${num}`}\n`;
+      confirm += `${i + 1}. @${participantJid.split('@')[0]}\n`;
     });
     confirm += '\n💡 Use *!amigoSecreto sortear* para realizar o sorteio!';
-    await sock.sendMessage(chatId, { text: confirm, mentions: unique }, { quoted: raw });
+    await sock.sendMessage(chatId, await applyMentionRules(confirm, unique), { quoted: raw });
     return true;
   }
 
@@ -517,11 +512,13 @@ const handle: CommandHandler = async (sock, msg) => {
     let fail = 0;
     for (const [giver, receiver] of Object.entries(result)) {
       try {
-        const nome = nomes[receiver] || receiver.split('@')[0];
-        let dm = `🎁 *Amigo Secreto Sorteado!*\n\n📱 *Grupo:* ${groupName}\n\n🎉 Você foi sorteado para presentear:\n\n👤 *${nome}* (@${receiver.split('@')[0]})\n`;
+        const receiverRendered = await applyMentionRules(`@${receiver.split('@')[0]}`, [receiver]);
+        let dm =
+          `🎁 *Amigo Secreto Sorteado!*\n\n📱 *Grupo:* ${groupName}\n\n` +
+          `🎉 Você foi sorteado para presentear:\n\n👤 ${receiverRendered.text}\n`;
         if (presentes[receiver]) dm += `\n🎁 *Presente desejado:* ${presentes[receiver]}\n`;
         dm += '\n💝 Boa sorte com o presente!';
-        await sock.sendMessage(giver, { text: dm, mentions: [receiver] });
+        await sock.sendMessage(giver, { text: dm, mentions: receiverRendered.mentions });
         ok++;
         await new Promise((r) => setTimeout(r, 500));
       } catch {
@@ -533,11 +530,9 @@ const handle: CommandHandler = async (sock, msg) => {
     if (fail > 0) confirm += `⚠️ Falhas: ${fail}\n`;
     confirm += '\n💬 Todos receberam no privado quem é seu amigo secreto!\n\n👥 *Participantes:*\n';
     participantes.forEach((participantJid, i) => {
-      const num = participantJid.split('@')[0];
-      const nome = nomes[participantJid];
-      confirm += `${i + 1}. ${nome && nome.trim() && nome !== num ? nome : `@${num}`}\n`;
+      confirm += `${i + 1}. @${participantJid.split('@')[0]}\n`;
     });
-    await sock.sendMessage(chatId, { text: confirm, mentions: participantes }, { quoted: raw });
+    await sock.sendMessage(chatId, await applyMentionRules(confirm, participantes), { quoted: raw });
     return true;
   }
 
@@ -557,7 +552,7 @@ const handle: CommandHandler = async (sock, msg) => {
       listText += `${i + 1}. @${participantJid.split('@')[0]}\n`;
     });
     listText += '\n💡 Use *!amigoSecreto sortear* para realizar o sorteio!';
-    await sock.sendMessage(chatId, { text: listText, mentions: participantes }, { quoted: raw });
+    await sock.sendMessage(chatId, await applyMentionRules(listText, participantes), { quoted: raw });
     return true;
   }
 

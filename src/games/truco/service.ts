@@ -1,6 +1,7 @@
 import type { WASocket } from '@whiskeysockets/baileys';
 import { getErrorMessage } from '../../lib/errors.js';
 import { logError } from '../../lib/logger.js';
+import { createMentionRenderer } from '../../lib/mentions.js';
 import * as repo from './repository.js';
 import { MatchAlreadyOpenError } from './repository.js';
 import { withMatchLock } from './lock.js';
@@ -29,6 +30,7 @@ import {
   formatHistory,
   formatJogadaResult,
   formatLobbyMessage,
+  getLobbyMentionJids,
   formatMaoOnzeRunMessage,
   formatMaoOnzeTimeoutMessage,
   formatMesa,
@@ -84,7 +86,7 @@ function suitSymbol(s: string): string {
 }
 
 function seatMentionJids(seats: readonly SeatPlayer[]): string[] {
-  return seats.map((s) => s.whatsappJid);
+  return seats.map((s) => s.userId);
 }
 
 // --- Socket e timers ---
@@ -225,7 +227,12 @@ export async function createLobby(
   await scheduleLobbyTimeout(match.match_id, ctx.groupId, ctx.groupJid);
 
   return {
-    groupMessages: [{ text: formatLobbyMessage(lobby), mentions: [ctx.mentionJid] }],
+    groupMessages: [
+      {
+        text: formatLobbyMessage(lobby),
+        mentions: getLobbyMentionJids(lobby),
+      },
+    ],
     privateMessages: [],
   };
 }
@@ -248,8 +255,8 @@ export async function joinLobby(ctx: TrucoContext): Promise<TrucoResponse> {
     return {
       groupMessages: [
         {
-          text: `✅ ${ctx.displayName} entrou!\n\n${formatLobbyMessage(result.lobby)}`,
-          mentions: [ctx.mentionJid],
+          text: `✅ @${ctx.userId.split('@')[0]} entrou!\n\n${formatLobbyMessage(result.lobby)}`,
+          mentions: getLobbyMentionJids(result.lobby),
         },
       ],
       privateMessages: [],
@@ -275,7 +282,10 @@ export async function leaveLobby(ctx: TrucoContext): Promise<TrucoResponse> {
       await repo.updateMatchLobby(match.match_id, { ...lobby, slots });
       return {
         groupMessages: [
-          { text: `👋 ${ctx.displayName} saiu da sala.`, mentions: [ctx.mentionJid] },
+          {
+            text: `👋 @${ctx.userId.split('@')[0]} saiu da sala.`,
+            mentions: [ctx.userId],
+          },
         ],
         privateMessages: [],
       };
@@ -553,7 +563,7 @@ function appendEventMessages(
         const player = state.seats.find((s) => state.scores[s.team] === 11);
         response.groupMessages.push({
           text: `1️⃣1️⃣ Mão de Onze! ${player ? formatPlayerMention(player) : 'Quem tem 11'}: !aceitar ou !correr.`,
-          mentions: player ? [player.whatsappJid] : seatMentionJids(state.seats),
+          mentions: player ? [player.userId] : seatMentionJids(state.seats),
         });
       } else {
         response.groupMessages.push({
@@ -616,7 +626,7 @@ function appendEventMessages(
       if (player && state.phase === 'playing') {
         const notice = formatTurnNoticeForSeat(state, ev.seat);
         if (notice) {
-          response.groupMessages.push({ text: notice, mentions: [player.whatsappJid] });
+          response.groupMessages.push({ text: notice, mentions: [player.userId] });
         }
       }
       break;
@@ -627,7 +637,7 @@ function appendEventMessages(
         ev.hidden || !ev.card ? 'carta escondida 🂠' : `${ev.card.rank}${suitSymbol(ev.card.suit)}`;
       response.groupMessages.push({
         text: `${formatPlayerMention(player)} jogou ${cardStr}`,
-        mentions: [player.whatsappJid],
+        mentions: [player.userId],
       });
       break;
     }
@@ -685,7 +695,7 @@ function appendEventMessages(
       const player = state.seats.find((s) => s.seat === ev.seat)!;
       response.groupMessages.push({
         text: `⏱️ Tempo esgotado! ${formatPlayerMention(player)} jogou automaticamente.`,
-        mentions: [player.whatsappJid],
+        mentions: [player.userId],
       });
       break;
     }
@@ -989,9 +999,12 @@ export async function deliverResponse(
   for (const pm of response.privateMessages) {
     await sock.sendMessage(pm.jid, { text: pm.text }).catch(reportError('envio no privado'));
   }
+
+  if (response.groupMessages.length === 0) return;
+
+  const renderer = await createMentionRenderer();
   for (const gm of response.groupMessages) {
-    await sock
-      .sendMessage(groupJid, { text: gm.text, mentions: gm.mentions ?? [] })
-      .catch(reportError('envio no grupo'));
+    const { text, mentions } = renderer.render(gm.text, gm.mentions);
+    await sock.sendMessage(groupJid, { text, mentions }).catch(reportError('envio no grupo'));
   }
 }
