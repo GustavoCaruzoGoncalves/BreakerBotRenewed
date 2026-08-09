@@ -13,6 +13,11 @@ module.exports = {
     .map(n => n.trim())
     .filter(Boolean)
     .map(n => `${n}@s.whatsapp.net`),
+  aura: {
+    enabled: ['1', 'true', 'yes', 'on', 'sim'].includes(
+      (process.env.AURA_ENABLED || '').trim().toLowerCase(),
+    ),
+  },
   baileys: {
     // Fallback se fetchLatestBaileysVersion falhar; o bot.js busca a versão atual em runtime.
     version: [2, 3000, 1035194821],

@@ -34,7 +34,7 @@ const handlers = [
   utilityCommand,
   banCommand,
   levelCommand,
-  auraCommand,
+  ...(config.aura.enabled ? [auraCommand] : []),
 ];
 
 const knownUsers = new Set();
@@ -163,9 +163,11 @@ async function handle(sock, msg) {
   await ensureSender(msg, sock);
 
   processXP(sock, msg).catch(err => console.error('[XP] Erro:', err.message));
-  auraCommand.processAuraMissions(sock, msg).catch(err => console.error('[AURA-MISSION] Erro:', err.message));
-  auraCommand.processAuraSticker(sock, msg).catch(err => console.error('[AURA-STICKER] Erro:', err.message));
-  auraSvc.trySpawnEvent(sock, msg.jid).catch(() => {});
+  if (config.aura.enabled) {
+    auraCommand.processAuraMissions(sock, msg).catch(err => console.error('[AURA-MISSION] Erro:', err.message));
+    auraCommand.processAuraSticker(sock, msg).catch(err => console.error('[AURA-STICKER] Erro:', err.message));
+    auraSvc.trySpawnEvent(sock, msg.jid).catch(() => {});
+  }
 
   if (msg.text?.trim() && !msg.raw.key.fromMe) {
     const msgType = Object.keys(msg.raw.message || {})[0];
@@ -196,7 +198,9 @@ async function handle(sock, msg) {
 }
 
 function handleReaction(sock, item) {
-  auraCommand.handleAuraReaction(sock, item).catch(() => {});
+  if (config.aura.enabled) {
+    auraCommand.handleAuraReaction(sock, item).catch(() => {});
+  }
 }
 
 module.exports = { handle, handleReaction };
