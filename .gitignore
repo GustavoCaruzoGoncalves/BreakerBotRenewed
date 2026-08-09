@@ -1,6 +1,9 @@
 auth_info
 node_modules/
 
+# Saída do build TypeScript
+dist/
+
 # Dados de usuários e níveis
 levels_info/
 aura_info/

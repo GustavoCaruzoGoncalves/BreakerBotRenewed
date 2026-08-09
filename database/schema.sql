@@ -392,3 +392,95 @@ COMMENT ON TABLE skullcards_matches IS 'SkullCards matches, UNO-like state.';
 COMMENT ON TABLE skullcards_hands IS 'Per-player cards in hand for SkullCards matches.';
 COMMENT ON TABLE skullcards_draw_pile IS 'Draw pile for SkullCards matches (top = lowest card_order).';
 COMMENT ON TABLE skullcards_discard_pile IS 'Discard pile history for SkullCards matches (top = highest card_order).';
+
+-- =============================================================================
+-- 9. TRUCO PAULISTA
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS truco_groups (
+    id SERIAL PRIMARY KEY,
+    whatsapp_jid VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_truco_groups_jid ON truco_groups(whatsapp_jid);
+
+-- Timeouts por grupo; NULL usa o default de TRUCO_*_TIMEOUT_SECONDS
+CREATE TABLE IF NOT EXISTS truco_group_settings (
+    group_id INTEGER PRIMARY KEY REFERENCES truco_groups(id) ON DELETE CASCADE,
+    turn_timeout_seconds INTEGER,
+    lobby_timeout_seconds INTEGER
+);
+
+-- A "aura" do Truco alimenta a tabela `aura` global; aqui ficam só as estatísticas.
+CREATE TABLE IF NOT EXISTS truco_user_stats (
+    user_id VARCHAR(100) PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    matches_played INTEGER NOT NULL DEFAULT 0,
+    wins INTEGER NOT NULL DEFAULT 0,
+    losses INTEGER NOT NULL DEFAULT 0,
+    matches_1v1 INTEGER NOT NULL DEFAULT 0,
+    matches_2v2 INTEGER NOT NULL DEFAULT 0,
+    wins_1v1 INTEGER NOT NULL DEFAULT 0,
+    wins_2v2 INTEGER NOT NULL DEFAULT 0,
+    win_streak INTEGER NOT NULL DEFAULT 0,
+    best_win_streak INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_truco_user_stats_wins ON truco_user_stats(wins DESC);
+
+CREATE TABLE IF NOT EXISTS truco_group_stats (
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    group_id INTEGER NOT NULL REFERENCES truco_groups(id) ON DELETE CASCADE,
+    matches_played INTEGER NOT NULL DEFAULT 0,
+    wins INTEGER NOT NULL DEFAULT 0,
+    losses INTEGER NOT NULL DEFAULT 0,
+    win_streak INTEGER NOT NULL DEFAULT 0,
+    best_win_streak INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, group_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_truco_group_stats_group ON truco_group_stats(group_id, wins DESC);
+
+CREATE TABLE IF NOT EXISTS truco_matches (
+    match_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id INTEGER NOT NULL REFERENCES truco_groups(id) ON DELETE CASCADE,
+    mode VARCHAR(10) NOT NULL CHECK (mode IN ('1v1', '2v2')),
+    status VARCHAR(20) NOT NULL CHECK (status IN ('waiting', 'active', 'finished', 'cancelled')),
+    created_by VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    lobby_json JSONB,
+    state_json JSONB,
+    winner_team SMALLINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_truco_matches_group_status ON truco_matches(group_id, status);
+
+-- Garante uma única partida em aberto por grupo (evita corrida na criação de lobby)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_truco_matches_one_open_per_group
+    ON truco_matches(group_id)
+    WHERE status IN ('waiting', 'active');
+
+CREATE TABLE IF NOT EXISTS truco_match_players (
+    match_id UUID NOT NULL REFERENCES truco_matches(match_id) ON DELETE CASCADE,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    team SMALLINT NOT NULL,
+    seat SMALLINT NOT NULL,
+    PRIMARY KEY (match_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_truco_match_players_user ON truco_match_players(user_id);
+
+COMMENT ON TABLE truco_groups IS 'Grupos de WhatsApp onde o Truco é jogado.';
+COMMENT ON TABLE truco_group_settings IS 'Timeouts de turno/lobby por grupo; NULL usa o default do .env.';
+COMMENT ON TABLE truco_user_stats IS 'Estatísticas globais do Truco; a aura fica na tabela `aura`.';
+COMMENT ON TABLE truco_group_stats IS 'Estatísticas do Truco por grupo.';
+COMMENT ON TABLE truco_matches IS 'Partidas de Truco; lobby e estado do jogo serializados em JSONB.';
+COMMENT ON TABLE truco_match_players IS 'Jogadores por partida de Truco (time e assento).';
