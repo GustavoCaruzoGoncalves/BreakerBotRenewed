@@ -2,6 +2,7 @@ import * as users from './services/users.js';
 import * as level from './services/level.js';
 import * as mentions from './lib/mentions.js';
 import * as repo from './database/repository.js';
+import type { UserInput } from './database/types.js';
 import { config } from './config.js';
 import { getErrorMessage } from './lib/errors.js';
 
@@ -98,31 +99,46 @@ async function ensureSender(msg: BotMessage, sock: WASocket): Promise<void> {
   if (users.isIgnoredChatJid(key.remoteJid)) return;
 
   const userId = await users.resolveSender(msg.raw);
-  if (!userId || knownUsers.has(userId)) return;
+  if (!userId) return;
   if (users.isGroupUserId(userId)) return;
   if (users.isBotUser(sock, userId)) return;
 
   const pushName = msg.raw.pushName || null;
   const lidJid = users.getLidJid(msg.raw);
-  const jid = lidJid?.endsWith('@lid') ? lidJid : userId;
   const existing = await repo.getUserById(userId);
 
   if (existing) {
-    if (pushName && existing.pushName !== pushName) {
-      await repo.updateUser(userId, { pushName });
+    const updates: UserInput = {};
+    if (pushName && existing.pushName !== pushName) updates.pushName = pushName;
+    if (users.shouldPersistJidUpdate(userId, existing.jid, lidJid)) {
+      updates.jid = lidJid!;
     }
-    await migratePhantom(jid, userId, pushName);
-  } else {
-    const migrated = await migratePhantom(jid, userId, pushName);
-    if (!migrated) {
-      await repo.createUser(userId, {
-        ...users.USER_DEFAULTS,
-        pushName,
-        jid,
-      });
+    if (Object.keys(updates).length > 0) {
+      await repo.updateUser(userId, updates);
+    }
+    if (lidJid?.endsWith('@lid')) {
+      await migratePhantom(lidJid, userId, pushName);
+    }
+    knownUsers.add(userId);
+    return;
+  }
+
+  if (knownUsers.has(userId)) return;
+
+  if (lidJid?.endsWith('@lid')) {
+    const migrated = await migratePhantom(lidJid, userId, pushName);
+    if (migrated) {
+      knownUsers.add(userId);
+      return;
     }
   }
 
+  const storedJid = users.storedJidForUser(userId, lidJid);
+  await repo.createUser(userId, {
+    ...users.USER_DEFAULTS,
+    pushName,
+    ...(storedJid ? { jid: storedJid } : {}),
+  });
   knownUsers.add(userId);
 }
 

@@ -9,7 +9,7 @@ export async function resolveMentionUserId(mentionJid: string): Promise<string |
   if (!mentionJid) return null;
   const found = await repo.findUserByJid(mentionJid);
   if (found) return found;
-  const byLid = await repo.findUserIdByJid(mentionJid);
+  const byLid = await repo.resolveMentionJid(mentionJid);
   if (byLid) return byLid;
   return mentionJid.endsWith('@s.whatsapp.net') ? mentionJid : null;
 }
@@ -36,7 +36,7 @@ export async function ensureTrucoUser(userId: string, fallbackName?: string): Pr
     await repo.createUser(userId, {
       ...USER_DEFAULTS,
       pushName: fallbackName ?? null,
-      jid: userId,
+      jid: userId.endsWith('@lid') ? userId : undefined,
     });
     return {
       userId,

@@ -75,7 +75,7 @@ async function resolveMentionedUser(
     await sock.sendMessage(jid, { text: '⚠️ Marque alguém: *@usuario*' }, { quoted: raw });
     return null;
   }
-  const userId = await repo.findUserIdByJid(mentionedJid);
+  const userId = await repo.resolveMentionJid(mentionedJid);
   if (!userId) {
     await sock.sendMessage(
       jid,

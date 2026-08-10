@@ -292,7 +292,7 @@ function userInsertParams(userId: string, userData: UserInput): unknown[] {
     d.push_name ?? userData.pushName ?? null,
     d.custom_name ?? userData.customName ?? null,
     d.custom_name_enabled ?? userData.customNameEnabled ?? false,
-    d.jid ?? userData.jid ?? userId,
+    d.jid ?? userData.jid ?? null,
     d.profile_picture ?? null,
     d.profile_picture_updated_at ?? null,
     d.emoji ?? null,
@@ -351,9 +351,16 @@ export async function updateUser(userId: string, userData: UserInput): Promise<U
   const d = camelToDb(userData as Record<string, unknown>);
   const existing = await getUserById(userId);
 
-  // Nunca rebaixar um JID canônico (@s.whatsapp.net) para um LID.
-  if (existing && asOptionalString(d.jid)?.endsWith('@lid') && existing.jid.endsWith('@s.whatsapp.net')) {
-    delete d.jid;
+  const incomingJid = asOptionalString(d.jid);
+  if (existing && incomingJid) {
+    // `user_id` já é o PN; a coluna `jid` guarda o LID do WhatsApp.
+    if (incomingJid.endsWith('@s.whatsapp.net')) {
+      if (existing.jid.endsWith('@lid')) {
+        delete d.jid;
+      } else if (incomingJid === userId) {
+        delete d.jid;
+      }
+    }
   }
 
   const sets: string[] = [];
@@ -660,6 +667,11 @@ export async function findUserByJid(jid: string): Promise<string | null> {
 export async function findUserIdByJid(jid: string | null | undefined): Promise<string | null> {
   if (!jid) return null;
   const toSearch = String(jid).trim();
+
+  // Menção por PN bate direto em `user_id`; antes só olhávamos a coluna `jid`.
+  const byUserIdOrJid = await findUserByJid(toSearch);
+  if (byUserIdOrJid) return byUserIdOrJid;
+
   const searchJid = toSearch.includes('@') ? toSearch : `${toSearch}@lid`;
   const r = await query<{ user_id: string }>(
     `SELECT user_id FROM users
@@ -670,6 +682,29 @@ export async function findUserIdByJid(jid: string | null | undefined): Promise<s
     [searchJid],
   );
   return r.rows[0]?.user_id ?? null;
+}
+
+/** Resolve o JID de uma menção do WhatsApp para o `users.user_id` canônico. */
+export async function resolveMentionJid(mentionJid: string | null | undefined): Promise<string | null> {
+  if (!mentionJid) return null;
+  const raw = String(mentionJid).trim();
+
+  const resolved = (await findUserByJid(raw)) ?? (await findUserIdByJid(raw));
+  if (resolved) return resolved;
+
+  if (raw.endsWith('@s.whatsapp.net')) {
+    const user = await getUserById(raw);
+    if (user) return raw;
+  }
+
+  const phone = raw.split('@')[0]?.split(':')[0];
+  if (phone && /^\d+$/.test(phone)) {
+    const pn = `${phone}@s.whatsapp.net`;
+    const user = await getUserById(pn);
+    if (user) return pn;
+  }
+
+  return null;
 }
 
 export async function resolveCanonicalUserId(

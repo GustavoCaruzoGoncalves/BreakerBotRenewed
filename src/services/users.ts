@@ -49,7 +49,7 @@ export function ensureUser(
   if (!existing) {
     usersData[userId] = {
       ...(USER_DEFAULTS as User),
-      jid: lidJid?.endsWith('@lid') ? lidJid : userId,
+      jid: storedJidForUser(userId, lidJid) ?? userId,
       pushName: pushName || null,
     };
     return true;
@@ -92,10 +92,37 @@ export function getSender(raw: WAMessage): string {
 export function getLidJid(raw: WAMessage): string | null {
   const remoteJid = raw.key.remoteJid;
   if (!remoteJid) return null;
+
+  const pickLid = (...candidates: (string | null | undefined)[]): string | null => {
+    for (const c of candidates) {
+      if (c?.endsWith('@lid')) return c;
+    }
+    return null;
+  };
+
   if (remoteJid.endsWith('@g.us')) {
-    return raw.key.participant?.endsWith('@lid') ? raw.key.participant : null;
+    return pickLid(raw.key.participant, raw.key.participantAlt);
   }
-  return raw.key.remoteJidAlt || null;
+
+  return pickLid(raw.key.remoteJidAlt, remoteJid);
+}
+
+/** `user_id` é o PN; a coluna `jid` deve guardar o LID quando existir. */
+export function storedJidForUser(userId: string, lidJid?: string | null): string | null {
+  return lidJid?.endsWith('@lid') ? lidJid : null;
+}
+
+export function shouldPersistJidUpdate(
+  userId: string,
+  existingJid: string | null | undefined,
+  incomingJid: string | null | undefined,
+): boolean {
+  if (!incomingJid?.endsWith('@lid')) return false;
+  if (existingJid === incomingJid) return false;
+  if (!existingJid || existingJid.endsWith('@s.whatsapp.net') || existingJid === userId) {
+    return true;
+  }
+  return existingJid.endsWith('@lid');
 }
 
 export function isIgnoredChatJid(jid: string | null | undefined): boolean {
@@ -155,7 +182,7 @@ export async function resolveTarget(
     if (!first) {
       return { userId: null, error: '❌ Usuário não encontrado na menção!' };
     }
-    const userId = await repo.findUserIdByJid(first);
+    const userId = await repo.resolveMentionJid(first);
     if (!userId) {
       return {
         userId: null,

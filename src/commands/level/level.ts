@@ -122,7 +122,7 @@ const handle: CommandHandler = async (sock, msg) => {
       return true;
     }
 
-    const targetId = await repo.findUserIdByJid(firstJid);
+    const targetId = await repo.resolveMentionJid(firstJid);
     if (!targetId) {
       await sock.sendMessage(
         jid,

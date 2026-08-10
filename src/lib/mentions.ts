@@ -88,9 +88,11 @@ export interface MentionInfo {
   hasCustomName: boolean;
 }
 
-function buildMentionInfo(usersData: UsersMap, globalEnabled: boolean, jid: string): MentionInfo {
-  const key = findUserKey(usersData, jid) || jid;
-  const user = resolveUser(usersData, jid);
+function buildMentionInfo(
+  globalEnabled: boolean,
+  key: string,
+  user: User | null,
+): MentionInfo {
   const nameInfo = displayNameOf(user);
   const canMention = globalEnabled && user?.allowMentions === true;
   const hasName = Boolean(nameInfo.displayName?.trim());
@@ -112,9 +114,24 @@ function buildMentionInfo(usersData: UsersMap, globalEnabled: boolean, jid: stri
   };
 }
 
+async function loadUserForMention(
+  jid: string,
+  usersData: UsersMap,
+): Promise<{ key: string; user: User | null }> {
+  const cachedKey = findUserKey(usersData, jid);
+  if (cachedKey && usersData[cachedKey]) {
+    return { key: cachedKey, user: usersData[cachedKey] };
+  }
+
+  const canonical = (await repo.resolveMentionJid(jid)) ?? cachedKey ?? jid;
+  const user = usersData[canonical] ?? (await repo.getUserById(canonical));
+  return { key: canonical, user: user ?? null };
+}
+
 export async function processSingleMention(jid: string): Promise<MentionInfo> {
   const [usersData, globalEnabled] = await Promise.all([getUsersData(), getMentionsEnabled()]);
-  return buildMentionInfo(usersData, globalEnabled, jid);
+  const { key, user } = await loadUserForMention(jid, usersData);
+  return buildMentionInfo(globalEnabled, key, user);
 }
 
 export async function getUsersData(): Promise<UsersMap> {

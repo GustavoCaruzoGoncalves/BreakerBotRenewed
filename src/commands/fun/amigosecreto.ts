@@ -394,7 +394,7 @@ const handle: CommandHandler = async (sock, msg) => {
   if (cmd === 'add') {
     const rawMentions = raw.message?.extendedTextMessage?.contextInfo?.mentionedJid ?? [];
     const resolved = await Promise.all(
-      rawMentions.map((r) => repo.findUserIdByJid(r).then((id) => id ?? r)),
+      rawMentions.map((r) => repo.resolveMentionJid(r).then((id) => id ?? r)),
     );
 
     const words = text.toLowerCase().split(/\s+/);

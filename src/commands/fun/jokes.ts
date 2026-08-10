@@ -113,7 +113,7 @@ async function handlePercentCmd(
   const firstMention = mentionedJid?.[0];
 
   if (firstMention) {
-    const userId = (await repo.findUserIdByJid(firstMention)) ?? firstMention;
+    const userId = (await repo.resolveMentionJid(firstMention)) ?? firstMention;
     const info = await mentions.processSingleMention(userId);
     let pct = rand101();
     let text: string;
@@ -179,7 +179,7 @@ async function handlePairCmd(
 ): Promise<boolean> {
   const rawMentions = msg.raw.message?.extendedTextMessage?.contextInfo?.mentionedJid ?? [];
   const mentionedJid = await Promise.all(
-    rawMentions.map((r) => repo.findUserIdByJid(r).then((id) => id ?? r)),
+    rawMentions.map((r) => repo.resolveMentionJid(r).then((id) => id ?? r)),
   );
   const input = msg.text.slice(cmd.length).trim();
 
@@ -286,7 +286,7 @@ async function handlePinto(sock: WASocket, msg: BotMessage): Promise<boolean> {
   }
 
   if (firstMention) {
-    const userId = (await repo.findUserIdByJid(firstMention)) ?? firstMention;
+    const userId = (await repo.resolveMentionJid(firstMention)) ?? firstMention;
     const info = await mentions.processSingleMention(userId);
 
     if (isSpecial) {

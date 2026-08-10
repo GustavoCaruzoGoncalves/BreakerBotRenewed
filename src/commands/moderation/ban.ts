@@ -17,7 +17,7 @@ const handle: CommandHandler = async (sock, msg) => {
   }
 
   const rawMentioned = raw.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-  const targetJid = rawMentioned ? ((await repo.findUserIdByJid(rawMentioned)) ?? rawMentioned) : null;
+  const targetJid = rawMentioned ? ((await repo.resolveMentionJid(rawMentioned)) ?? rawMentioned) : null;
 
   if (!targetJid) {
     await sock.sendMessage(jid, {

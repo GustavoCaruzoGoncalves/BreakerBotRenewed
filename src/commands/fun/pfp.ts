@@ -172,7 +172,7 @@ async function resolveTarget(msg: BotMessage): Promise<PfpTarget> {
     const jids = msg.raw.message?.extendedTextMessage?.contextInfo?.mentionedJid ?? [];
     const first = jids[0];
     if (first) {
-      return { kind: 'user', userId: (await repo.findUserIdByJid(first)) ?? first };
+      return { kind: 'user', userId: (await repo.resolveMentionJid(first)) ?? first };
     }
     return { kind: 'error', error: '❌ Usuário não encontrado na menção!' };
   }

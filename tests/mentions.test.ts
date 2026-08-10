@@ -11,6 +11,8 @@ import type { User } from '../src/database/types.js';
 vi.mock('../src/database/repository.js', () => ({
   getAllUsers: vi.fn(),
   getMentionsPreferences: vi.fn(),
+  getUserById: vi.fn(),
+  resolveMentionJid: vi.fn(),
 }));
 
 const USER_ID = '5516996242810@s.whatsapp.net';
@@ -25,8 +27,12 @@ function mockUser(overrides: Partial<User> = {}): User {
   } as User;
 }
 
+const REVENANT_ID = '5516996421595@s.whatsapp.net';
+
 beforeEach(() => {
   vi.mocked(repo.getMentionsPreferences).mockResolvedValue({ globalEnabled: true });
+  vi.mocked(repo.resolveMentionJid).mockResolvedValue(null);
+  vi.mocked(repo.getUserById).mockResolvedValue(null);
 });
 
 describe('processSingleMention', () => {
@@ -56,6 +62,31 @@ describe('processSingleMention', () => {
     const info = await processSingleMention(USER_ID);
     expect(info.mentionText).toBe('@5516996242810 (GuMaster)');
     expect(info.mentions).toEqual([USER_ID]);
+  });
+
+  it('resolve usuário pelo banco quando o cache em memória não o encontra', async () => {
+    vi.mocked(repo.getAllUsers).mockResolvedValue({});
+    vi.mocked(repo.resolveMentionJid).mockResolvedValue(REVENANT_ID);
+    vi.mocked(repo.getUserById).mockResolvedValue(
+      mockUser({ pushName: 'Revenant', allowMentions: false, jid: REVENANT_ID }),
+    );
+
+    const info = await processSingleMention(REVENANT_ID);
+    expect(info.mentionText).toBe('Revenant');
+    expect(info.mentions).toEqual([]);
+    expect(info.hasName).toBe(true);
+  });
+
+  it('marca com @ quando menções estão ativas mesmo vindo de LID no cache vazio', async () => {
+    vi.mocked(repo.getAllUsers).mockResolvedValue({});
+    vi.mocked(repo.resolveMentionJid).mockResolvedValue(REVENANT_ID);
+    vi.mocked(repo.getUserById).mockResolvedValue(
+      mockUser({ pushName: 'Revenant', allowMentions: true, jid: '12345@lid' }),
+    );
+
+    const info = await processSingleMention('12345@lid');
+    expect(info.mentionText).toBe('@5516996421595');
+    expect(info.mentions).toEqual([REVENANT_ID]);
   });
 });
 
