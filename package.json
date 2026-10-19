@@ -13,6 +13,8 @@
     "dev:bot": "tsx watch src/index.ts",
     "dev:api": "tsx watch src/api/server.ts",
     "menu": "tsx scripts/print-menu.ts",
+    "db:setup": "tsx scripts/bootstrap-db.ts",
+    "db:init": "tsx scripts/db-setup.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "server": "npm run build && pm2 start ecosystem.config.cjs",
@@ -28,6 +30,7 @@
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@opencode-ai/sdk": "^1.19.3",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "axios": "^1.8.3",
     "cheerio": "^1.2.0",

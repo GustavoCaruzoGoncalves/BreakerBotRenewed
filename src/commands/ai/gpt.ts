@@ -1,4 +1,7 @@
+import { config } from '../../config.js';
 import { create } from '../../lib/chatai.js';
+import { buildAiContextAppend } from '../../services/memory/context.js';
+import { recordAssistantMessage } from '../../services/memory/recorder.js';
 import type { Command } from '../../types/bot.js';
 
 const SYSTEM =
@@ -15,6 +18,14 @@ const handle = create({
   systemPrompt: SYSTEM,
   imageSystemPrompt:
     'Você é um assistente que interpreta imagens e responde de forma precisa com base na imagem e no texto enviado pelo usuário.',
+  getSystemContextAppend:
+    config.memory.enabled && config.memory.shareContextInGpt
+      ? async (_sock, msg, sender) => buildAiContextAppend(msg.jid, sender)
+      : undefined,
+  onAssistantReply:
+    config.memory.enabled && config.memory.shareContextInGpt
+      ? async (_sock, msg, sender, response) => recordAssistantMessage(msg.jid, sender, response)
+      : undefined,
 });
 
 const gptCommand: Command = {

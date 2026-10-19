@@ -39,6 +39,14 @@ export interface ChatAiOptions {
   systemPrompt: string;
   imageSystemPrompt: string;
   extraHandler?: ExtraHandler;
+  /** Contexto adicional (ex.: memória PostgreSQL) injetado no system prompt. */
+  getSystemContextAppend?: (sock: WASocket, msg: BotMessage, sender: string) => Promise<string>;
+  onAssistantReply?: (
+    sock: WASocket,
+    msg: BotMessage,
+    sender: string,
+    response: string,
+  ) => Promise<void>;
 }
 
 /** Formato compatível com a API de chat completions da OpenAI. */
@@ -154,8 +162,11 @@ export function create(opts: ChatAiOptions): CommandHandler {
     if (quotedText) newMessages.push({ role: 'user', content: quotedText });
     newMessages.push({ role: 'user', content: prompt });
 
+    const contextAppend = opts.getSystemContextAppend
+      ? await opts.getSystemContextAppend(sock, msg, sender).catch(() => '')
+      : '';
     const response = await callAPI([
-      { role: 'system', content: opts.systemPrompt },
+      { role: 'system', content: `${opts.systemPrompt}${contextAppend || ''}` },
       ...(memory[jid] ?? []),
       ...newMessages,
     ]);
@@ -164,5 +175,8 @@ export function create(opts: ChatAiOptions): CommandHandler {
     push(jid, 'assistant', response);
 
     await sock.sendMessage(jid, { text: response });
+    if (opts.onAssistantReply) {
+      await opts.onAssistantReply(sock, msg, sender, response).catch(() => {});
+    }
   };
 }

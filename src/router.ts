@@ -9,8 +9,11 @@ import { getErrorMessage } from './lib/errors.js';
 import stickerCommand from './commands/media/sticker.js';
 import audioCommand from './commands/media/audio.js';
 import gptCommand from './commands/ai/gpt.js';
+import opencodeCommand from './commands/ai/opencode.js';
 import zhipuCommand from './commands/ai/zhipu.js';
 import grokCommand from './commands/ai/grok.js';
+import memoriaCommand from './commands/memory/memoria.js';
+import { recordIncomingMessage } from './services/memory/recorder.js';
 import jokesCommand, { handleEmojiReaction } from './commands/fun/jokes.js';
 import pfpCommand from './commands/fun/pfp.js';
 import triviaCommand from './commands/fun/trivia.js';
@@ -34,8 +37,10 @@ const commands: Command[] = [
   stickerCommand,
   audioCommand,
   gptCommand,
+  opencodeCommand,
   zhipuCommand,
   grokCommand,
+  memoriaCommand,
   jokesCommand,
   pfpCommand,
   triviaCommand,
@@ -201,6 +206,10 @@ async function processXP(sock: WASocket, msg: BotMessage): Promise<void> {
 
 export async function handle(sock: WASocket, msg: BotMessage): Promise<void> {
   await ensureSender(msg, sock);
+
+  recordIncomingMessage(sock, msg).catch((err: unknown) =>
+    console.error('[MEMORY] Erro:', getErrorMessage(err)),
+  );
 
   processXP(sock, msg).catch((err: unknown) => console.error('[XP] Erro:', getErrorMessage(err)));
   if (config.aura.enabled) {

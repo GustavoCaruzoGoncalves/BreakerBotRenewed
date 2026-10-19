@@ -484,3 +484,71 @@ COMMENT ON TABLE truco_user_stats IS 'Estatísticas globais do Truco; a aura fic
 COMMENT ON TABLE truco_group_stats IS 'Estatísticas do Truco por grupo.';
 COMMENT ON TABLE truco_matches IS 'Partidas de Truco; lobby e estado do jogo serializados em JSONB.';
 COMMENT ON TABLE truco_match_players IS 'Jogadores por partida de Truco (time e assento).';
+
+-- =============================================================================
+-- 10. AI MEMORY & OPENCODE INTEGRATION
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS ai_memory_settings (
+    user_id VARCHAR(100) PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    purged_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ai_conversation_threads (
+    thread_id VARCHAR(200) PRIMARY KEY,
+    chat_jid VARCHAR(100) NOT NULL,
+    kind VARCHAR(10) NOT NULL CHECK (kind IN ('dm', 'group')),
+    dm_user_id VARCHAR(100) REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_threads_chat_jid ON ai_conversation_threads(chat_jid);
+
+CREATE TABLE IF NOT EXISTS ai_chat_messages (
+    id BIGSERIAL PRIMARY KEY,
+    thread_id VARCHAR(200) NOT NULL REFERENCES ai_conversation_threads(thread_id) ON DELETE CASCADE,
+    wa_message_id VARCHAR(128) NOT NULL,
+    chat_jid VARCHAR(100) NOT NULL,
+    sender_user_id VARCHAR(100) REFERENCES users(user_id) ON DELETE SET NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL,
+    quoted_snippet TEXT,
+    is_from_bot BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (chat_jid, wa_message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_thread_time ON ai_chat_messages(thread_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_sender ON ai_chat_messages(sender_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS ai_user_memories (
+    id BIGSERIAL PRIMARY KEY,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    category VARCHAR(50) NOT NULL,
+    content TEXT NOT NULL,
+    source_thread_id VARCHAR(200),
+    source_wa_message_id VARCHAR(128),
+    shareable BOOLEAN NOT NULL DEFAULT false,
+    confidence REAL NOT NULL DEFAULT 0.7,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_user_memories_user_active ON ai_user_memories(user_id, created_at DESC)
+    WHERE deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS ai_opencode_sessions (
+    context_key VARCHAR(200) PRIMARY KEY,
+    opencode_session_id VARCHAR(100) NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE ai_memory_settings IS 'Preferências de memorização por usuário (opt-out, purge).';
+COMMENT ON TABLE ai_conversation_threads IS 'Threads de conversa (DM por usuário ou grupo por JID).';
+COMMENT ON TABLE ai_chat_messages IS 'Histórico conversacional persistido para contexto de IA.';
+COMMENT ON TABLE ai_user_memories IS 'Memória de longo prazo por usuário canônico.';
+COMMENT ON TABLE ai_opencode_sessions IS 'Mapeamento thread WhatsApp -> sessão OpenCode reutilizável.';

@@ -51,6 +51,31 @@ export interface ApiConfig {
   host: string;
 }
 
+export interface OpenCodeConfig {
+  enabled: boolean;
+  baseUrl: string;
+  username: string;
+  password: string;
+  agent: string;
+  modelProvider: string;
+  modelId: string;
+  timeoutMs: number;
+  /** Ferramentas habilitadas para usuários comuns (pesquisa/leitura). */
+  publicTools: Record<string, boolean>;
+  /** Ferramentas extras só para administradores (ex.: shell). */
+  adminTools: Record<string, boolean>;
+}
+
+export interface MemoryConfig {
+  enabled: boolean;
+  shortTermLimit: number;
+  groupContextLimit: number;
+  personalMemoryLimit: number;
+  maxMessageChars: number;
+  /** Inclui memória pessoal persistida nas respostas do !gpt. */
+  shareContextInGpt: boolean;
+}
+
 export interface TrucoConfig {
   /** Defaults usados quando o grupo não tem override em `truco_group_settings`. */
   turnTimeoutSeconds: number;
@@ -68,6 +93,24 @@ export interface BotConfig {
   baileys: BaileysConfig;
   api: ApiConfig;
   truco: TrucoConfig;
+  opencode: OpenCodeConfig;
+  memory: MemoryConfig;
+}
+
+function parseToolMap(value: string | undefined, fallback: Record<string, boolean>): Record<string, boolean> {
+  const raw = (value ?? '').trim();
+  if (!raw) return fallback;
+  const out: Record<string, boolean> = {};
+  for (const part of raw.split(',')) {
+    const token = part.trim();
+    if (!token) continue;
+    if (token.startsWith('!')) {
+      out[token.slice(1)] = false;
+    } else {
+      out[token] = true;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : fallback;
 }
 
 export const config: BotConfig = {
@@ -96,6 +139,37 @@ export const config: BotConfig = {
     auraBaseWin: 20,
     auraPerHandPoint: 2,
     auraLoss: 15,
+  },
+  opencode: {
+    enabled: parseBoolean(process.env.OPENCODE_ENABLED),
+    baseUrl: (process.env.OPENCODE_BASE_URL ?? 'http://127.0.0.1:4096').replace(/\/$/, ''),
+    username: process.env.OPENCODE_SERVER_USERNAME ?? process.env.OPENCODE_USERNAME ?? 'opencode',
+    password: process.env.OPENCODE_SERVER_PASSWORD ?? process.env.OPENCODE_PASSWORD ?? '',
+    agent: process.env.OPENCODE_AGENT ?? 'general',
+    modelProvider: process.env.OPENCODE_MODEL_PROVIDER ?? '',
+    modelId: process.env.OPENCODE_MODEL ?? process.env.OPENCODE_MODEL_ID ?? '',
+    timeoutMs: Number(process.env.OPENCODE_TIMEOUT_MS ?? 120_000),
+    publicTools: parseToolMap(process.env.OPENCODE_PUBLIC_TOOLS, {
+      websearch: true,
+      webfetch: true,
+      read: true,
+    }),
+    adminTools: parseToolMap(process.env.OPENCODE_ADMIN_TOOLS, {
+      websearch: true,
+      webfetch: true,
+      read: true,
+      bash: true,
+      edit: true,
+      write: true,
+    }),
+  },
+  memory: {
+    enabled: parseBoolean(process.env.AI_MEMORY_ENABLED ?? process.env.MEMORY_ENABLED ?? 'true'),
+    shortTermLimit: Number(process.env.AI_MEMORY_SHORT_TERM_LIMIT ?? 40),
+    groupContextLimit: Number(process.env.AI_MEMORY_GROUP_CONTEXT_LIMIT ?? 25),
+    personalMemoryLimit: Number(process.env.AI_MEMORY_PERSONAL_LIMIT ?? 20),
+    maxMessageChars: Number(process.env.AI_MEMORY_MAX_MESSAGE_CHARS ?? 4000),
+    shareContextInGpt: parseBoolean(process.env.AI_MEMORY_IN_GPT ?? 'true'),
   },
 };
 

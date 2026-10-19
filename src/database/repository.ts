@@ -1,4 +1,5 @@
 import type { WAMessageKey } from '@whiskeysockets/baileys';
+import { migrateMemoryUserId } from './memoryRepository.js';
 import { getClient, query } from './pool.js';
 import type {
   AmigoSecretoGroup,
@@ -1129,6 +1130,8 @@ export async function migrateUserId(
         oldId,
       ]);
 
+      await migrateMemoryUserId(oldId, newId);
+
       await client.query('DELETE FROM users WHERE user_id = $1', [oldId]);
     } else {
       // Só o fantasma existe: renomear o user_id e atualizar os campos informados.
@@ -1173,6 +1176,8 @@ export async function migrateUserId(
         newId,
         oldId,
       ]);
+
+      await migrateMemoryUserId(oldId, newId);
     }
 
     await client.query('COMMIT');
