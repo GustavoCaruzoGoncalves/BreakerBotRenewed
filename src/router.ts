@@ -13,6 +13,8 @@ import opencodeCommand from './commands/ai/opencode.js';
 import zhipuCommand from './commands/ai/zhipu.js';
 import grokCommand from './commands/ai/grok.js';
 import memoriaCommand from './commands/memory/memoria.js';
+import consentirCommand from './commands/memory/consentir.js';
+import meusdadosCommand from './commands/userdata/meusdados.js';
 import { recordIncomingMessage } from './services/memory/recorder.js';
 import jokesCommand, { handleEmojiReaction } from './commands/fun/jokes.js';
 import pfpCommand from './commands/fun/pfp.js';
@@ -41,6 +43,8 @@ const commands: Command[] = [
   zhipuCommand,
   grokCommand,
   memoriaCommand,
+  consentirCommand,
+  meusdadosCommand,
   jokesCommand,
   pfpCommand,
   triviaCommand,

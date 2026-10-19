@@ -757,6 +757,53 @@ export async function resolveCanonicalUserId(
 
 // --- Rankings ---
 
+export interface PublicUserLookupRow {
+  userId: string;
+  displayName: string;
+  level: number;
+  xp: number;
+}
+
+export async function searchUsersByDisplayName(
+  queryText: string,
+  limit = 3,
+): Promise<PublicUserLookupRow[]> {
+  const q = queryText.trim();
+  if (q.length < 2) return [];
+  const capped = Math.min(Math.max(limit, 1), 5);
+  const pattern = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
+  const r = await query<{
+    user_id: string;
+    level: number | null;
+    xp: number | null;
+    display_name: string;
+  }>(
+    `SELECT u.user_id,
+            u.level,
+            u.xp,
+            COALESCE(
+              NULLIF(CASE WHEN u.custom_name_enabled THEN u.custom_name END, ''),
+              NULLIF(u.push_name, ''),
+              split_part(u.user_id, '@', 1)
+            ) AS display_name
+     FROM users u
+     WHERE u.user_id NOT LIKE '%@g.us'
+       AND (
+         u.push_name ILIKE $1 ESCAPE '\\'
+         OR u.custom_name ILIKE $1 ESCAPE '\\'
+       )
+     ORDER BY u.total_messages DESC, u.level DESC
+     LIMIT $2`,
+    [pattern, capped],
+  );
+  return r.rows.map((row) => ({
+    userId: row.user_id,
+    displayName: row.display_name,
+    level: row.level ?? 1,
+    xp: row.xp ?? 0,
+  }));
+}
+
 export async function getLevelRanking(limit = 10): Promise<LevelRankingEntry[]> {
   const r = await query<{
     userId: string;

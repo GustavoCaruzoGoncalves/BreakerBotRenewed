@@ -3,6 +3,7 @@ import { getErrorMessage } from '../../lib/errors.js';
 import * as memRepo from '../../database/memoryRepository.js';
 import { buildDmThreadId, buildGroupThreadId } from '../../services/memory/logic.js';
 import { recordAssistantMessage } from '../../services/memory/recorder.js';
+import { buildToolContextFromMessage } from '../../services/agentDb/context.js';
 import { chatWithOpencode } from '../../services/opencode/service.js';
 import * as users from '../../services/users.js';
 import type { BotMessage, Command, CommandHandler, WASocket } from '../../types/bot.js';
@@ -67,6 +68,7 @@ const handle: CommandHandler = async (sock, msg) => {
   const title = jid.endsWith('@g.us') ? `Grupo ${jid}` : `DM ${sender}`;
 
   try {
+    const toolContext = await buildToolContextFromMessage(msg, sender);
     const result = await chatWithOpencode({
       contextKey,
       sessionTitle: title,
@@ -76,6 +78,7 @@ const handle: CommandHandler = async (sock, msg) => {
       quotedText,
       isAdmin: config.admins.includes(sender),
       systemBase: '',
+      toolContext,
     });
 
     await sock.sendMessage(jid, { text: result.text });

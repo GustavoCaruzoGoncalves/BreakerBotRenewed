@@ -66,6 +66,10 @@ export interface OpenCodeConfig {
   adminTools: Record<string, boolean>;
 }
 
+export interface AgentDbConfig {
+  enabled: boolean;
+}
+
 export interface MemoryConfig {
   enabled: boolean;
   shortTermLimit: number;
@@ -95,6 +99,7 @@ export interface BotConfig {
   truco: TrucoConfig;
   opencode: OpenCodeConfig;
   memory: MemoryConfig;
+  agentDb: AgentDbConfig;
 }
 
 function parseToolMap(value: string | undefined, fallback: Record<string, boolean>): Record<string, boolean> {
@@ -162,6 +167,9 @@ export const config: BotConfig = {
       edit: true,
       write: true,
     }),
+  },
+  agentDb: {
+    enabled: parseBoolean(process.env.AI_AGENT_DB_ENABLED ?? 'true'),
   },
   memory: {
     enabled: parseBoolean(process.env.AI_MEMORY_ENABLED ?? process.env.MEMORY_ENABLED ?? 'true'),

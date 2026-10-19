@@ -46,6 +46,23 @@ curl -u opencode:sua-senha-segura http://127.0.0.1:4096/global/health
 
 Depende das **ferramentas/agente** configurados no OpenCode (ex.: `websearch`, `webfetch`). Ajuste `OPENCODE_PUBLIC_TOOLS` e o agente em `OPENCODE_AGENT` conforme a instalação (`GET /experimental/tool/ids` no servidor).
 
+## Ferramentas de banco (Agent DB)
+
+Com `AI_AGENT_DB_ENABLED=true`, o OpenCode usa um plano estruturado em duas etapas:
+
+1. Decide quais ferramentas de leitura chamar (`get_my_level_stats`, rankings, etc.).
+2. O **backend** executa SQL parametrizado com autorização (DM/grupo, consentimento, menções).
+
+Ferramentas disponíveis: `get_my_level_stats`, `get_my_badges`, `get_my_aura`, `get_my_missions`, `get_my_preferences`, `get_my_level_history`, `get_my_truco_stats`, `get_level_ranking`, `get_aura_ranking`, `get_truco_ranking`, `get_mentioned_user_public_stats`, `lookup_users_public`, `get_user_extended_stats`.
+
+Consentimento: `!consentir aprovar` / `negar` / `revogar`.
+
+Comandos diretos (mesma camada): `!meusdados`, `!meunivel`, `!minhasaura`, `!meuranking`.
+
+| Variável | Default |
+| --- | --- |
+| `AI_AGENT_DB_ENABLED` | `true` |
+
 ## Comandos
 
 - `!opencode` / `!oc` — agente OpenCode com memória + web (requer `OPENCODE_ENABLED=true`).

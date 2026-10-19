@@ -552,3 +552,41 @@ COMMENT ON TABLE ai_conversation_threads IS 'Threads de conversa (DM por usuári
 COMMENT ON TABLE ai_chat_messages IS 'Histórico conversacional persistido para contexto de IA.';
 COMMENT ON TABLE ai_user_memories IS 'Memória de longo prazo por usuário canônico.';
 COMMENT ON TABLE ai_opencode_sessions IS 'Mapeamento thread WhatsApp -> sessão OpenCode reutilizável.';
+
+CREATE TABLE IF NOT EXISTS ai_data_consent_grants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    granted_to_user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    scope VARCHAR(50) NOT NULL,
+    purpose TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_consent_grants_owner ON ai_data_consent_grants(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_ai_consent_grants_grantee ON ai_data_consent_grants(granted_to_user_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_consent_grants_active
+    ON ai_data_consent_grants(owner_user_id, granted_to_user_id, scope)
+    WHERE revoked_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS ai_data_consent_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    requester_user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    scope VARCHAR(50) NOT NULL,
+    chat_jid VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'approved', 'denied', 'expired')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    resolved_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_consent_requests_owner_pending
+    ON ai_data_consent_requests(owner_user_id, status)
+    WHERE status = 'pending';
+
+COMMENT ON TABLE ai_data_consent_grants IS 'Consentimento verificável para compartilhar dados pessoais entre usuários.';
+COMMENT ON TABLE ai_data_consent_requests IS 'Pedidos pendentes de consentimento aguardando confirmação do titular.';

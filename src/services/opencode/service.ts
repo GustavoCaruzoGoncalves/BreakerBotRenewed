@@ -2,6 +2,8 @@ import type { OpencodeClient } from '@opencode-ai/sdk';
 import { config } from '../../config.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import * as memRepo from '../../database/memoryRepository.js';
+import { runAgentWithDbTools } from '../agentDb/orchestrator.js';
+import type { ToolRequestContext } from '../agentDb/types.js';
 import { buildAiContextAppend } from '../memory/context.js';
 import {
   checkOpencodeHealth,
@@ -61,6 +63,7 @@ export interface OpencodeChatInput {
   quotedText?: string | null;
   isAdmin: boolean;
   systemBase: string;
+  toolContext?: ToolRequestContext;
 }
 
 export interface OpencodeChatResult {
@@ -101,11 +104,27 @@ export async function chatWithOpencode(
         promptText = `[Mensagem citada]\n${input.quotedText}\n\n[Pergunta]\n${input.userPrompt}`;
       }
 
+      const baseSystem = `${input.systemBase || DEFAULT_SYSTEM}${memoryAppend}`;
+
+      if (config.agentDb.enabled && input.toolContext) {
+        const agentResult = await runAgentWithDbTools({
+          client,
+          sessionId,
+          baseSystem,
+          userPrompt: promptText,
+          toolContext: input.toolContext,
+          isAdmin: input.isAdmin,
+        });
+        if (agentResult.ok && agentResult.text.trim()) {
+          return { ok: true, text: agentResult.text };
+        }
+      }
+
       const tools = input.isAdmin ? config.opencode.adminTools : config.opencode.publicTools;
 
       const body: NonNullable<Parameters<OpencodeClient['session']['prompt']>[0]>['body'] = {
         agent: config.opencode.agent,
-        system: `${input.systemBase || DEFAULT_SYSTEM}${memoryAppend}`,
+        system: baseSystem,
         tools,
         parts: [{ type: 'text', text: promptText }],
       };

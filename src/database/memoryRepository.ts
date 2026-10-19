@@ -236,6 +236,22 @@ export async function deleteOpencodeSessionMapping(contextKey: string): Promise<
 
 export async function migrateMemoryUserId(oldId: string, newId: string): Promise<void> {
   await query(
+    `UPDATE ai_data_consent_grants SET owner_user_id = $1 WHERE owner_user_id = $2`,
+    [newId, oldId],
+  );
+  await query(
+    `UPDATE ai_data_consent_grants SET granted_to_user_id = $1 WHERE granted_to_user_id = $2`,
+    [newId, oldId],
+  );
+  await query(
+    `UPDATE ai_data_consent_requests SET owner_user_id = $1 WHERE owner_user_id = $2`,
+    [newId, oldId],
+  );
+  await query(
+    `UPDATE ai_data_consent_requests SET requester_user_id = $1 WHERE requester_user_id = $2`,
+    [newId, oldId],
+  );
+  await query(
     `UPDATE ai_chat_messages SET sender_user_id = $1 WHERE sender_user_id = $2`,
     [newId, oldId],
   );
