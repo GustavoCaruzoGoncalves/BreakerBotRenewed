@@ -1,6 +1,7 @@
 import type { OpencodeClient } from '@opencode-ai/sdk';
 import { config } from '../../config.js';
 import { extractTextFromParts, withTimeout } from '../opencode/client.js';
+import { buildRunnableCommandsPrompt } from './botActions.js';
 import { buildBotCapabilitiesPrompt } from './capabilities.js';
 import { looksLikePromptInjection } from './policy.js';
 import { buildToolCatalogPrompt, executeToolBatch } from './tools.js';
@@ -93,6 +94,13 @@ function actionExecutedInResults(
 export function inferToolsFromQuestion(question: string, mediaKind: MediaKind = null): ToolCall[] {
   const lower = question.toLowerCase();
 
+  if (
+    /\bmenu\b|lista de comandos|manda(r)? (o |a )?ajuda|!ajuda|comandos dispon/.test(lower) ||
+    (/manda(r)?/.test(lower) && /menu|ajuda|help/.test(lower))
+  ) {
+    return [{ tool: 'run_bot_command', args: { command: '!menu' } }];
+  }
+
   if (mediaKind === 'sticker' && /png|imagem|toimg|converter/.test(lower)) {
     return [{ tool: 'run_bot_command', args: { command: '!toimg' } }];
   }
@@ -111,16 +119,12 @@ export function inferToolsFromQuestion(question: string, mediaKind: MediaKind = 
   }
 
   if (
-    /o que (tem|dá|da pra|posso)|funcionalidades|comandos|fazer (no|neste|nesse|na porra)|bot\?*$/.test(
+    /o que (tem|dá|da pra|posso)|funcionalidades|fazer (no|neste|nesse|na porra)|bot\?*$/.test(
       lower,
     ) ||
     /tem de bom|o que (eu )?faço|como (usar|funciona)/.test(lower)
   ) {
-    return [
-      { tool: 'get_my_level_stats', args: {} },
-      { tool: 'get_my_aura', args: {} },
-      { tool: 'get_my_missions', args: {} },
-    ];
+    return [{ tool: 'run_bot_command', args: { command: '!menu' } }];
   }
   if (/meu (nível|level|xp|prestígio)/.test(lower)) {
     return [{ tool: 'get_my_level_stats', args: {} }];
@@ -250,8 +254,10 @@ export async function runAgentWithDbTools(input: {
     '\n\n' +
     capabilities +
     catalog +
-    '\n\nRegras: estatísticas do BreakerBot vêm das ferramentas, não da memória conversacional. ' +
-    'Se o usuário pedir uma ação (figurinha, ranking, menu etc.) e houver mídia ou comando aplicável, use run_bot_command em vez de só explicar como usar.';
+    buildRunnableCommandsPrompt(input.isAdmin) +
+    '\n\nRegras: estatísticas do BreakerBot vêm das ferramentas de leitura, não da memória conversacional. ' +
+    'Se pedirem menu, figurinha, ranking, truco ou qualquer coisa que exista como comando, use run_bot_command com o gatilho correto. ' +
+    'Nunca diga pro usuário digitar !menu ou outro comando se você pode executar run_bot_command.';
 
   const planPrompt =
     `Pergunta do usuário:\n${input.userPrompt}\n\n` +
@@ -266,11 +272,11 @@ export async function runAgentWithDbTools(input: {
     };
   }
 
-  const inferredActions = inferToolsFromQuestion(input.userPrompt, input.mediaKind ?? null);
-  const hasInferredAction = inferredActions.some((t) => t.tool === 'run_bot_command');
+  const inferred = inferToolsFromQuestion(input.userPrompt, input.mediaKind ?? null);
+  const commandCalls = inferred.filter((t) => t.tool === 'run_bot_command');
 
-  if (plan.step === 'respond' && hasInferredAction) {
-    plan = { step: 'use_tools', tools: inferredActions };
+  if (commandCalls.length > 0) {
+    plan = { step: 'use_tools', tools: commandCalls };
   } else if (plan.step === 'respond' && plan.message?.trim()) {
     if (isAgentPlanJson(plan.message)) {
       plan = parseJsonPlan(plan.message) ?? plan;

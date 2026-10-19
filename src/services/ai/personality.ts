@@ -25,7 +25,7 @@ export function buildPersonalityPrompt(mode: AiInteractionMode): string {
   return (
     base +
     '\n\nModo direto: alguém te chamou ou te mandou mensagem no privado. Responda à pessoa, usando o histórico do chat quando fizer sentido. ' +
-    'Só mencione comandos do bot se a pessoa perguntar o que dá pra fazer aqui.'
+    'Se pedirem menu, figurinha, ranking ou qualquer função do bot, execute via run_bot_command; não mande a pessoa digitar !comando manualmente.'
   );
 }
 

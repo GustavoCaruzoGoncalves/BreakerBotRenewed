@@ -45,7 +45,7 @@ export const TOOL_CATALOG: ReadonlyArray<{ name: ToolName; description: string }
   {
     name: 'run_bot_command',
     description:
-      'Executa um comando real do BreakerBot (ex.: !sticker com mídia já anexa). Args: { "command": "!sticker" } — pode incluir argumentos após o gatilho.',
+      'Executa qualquer comando registrado do BreakerBot (!menu, !sticker, !truco, etc.). Args: { "command": "!menu" } — inclua argumentos após o gatilho quando o comando exigir.',
   },
 ];
 

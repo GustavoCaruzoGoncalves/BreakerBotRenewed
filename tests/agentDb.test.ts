@@ -4,7 +4,10 @@ import {
   looksLikePromptInjection,
   stripUntrustedIdentityArgs,
 } from '../src/services/agentDb/policy.js';
-import { validateRunnableCommandLine } from '../src/services/agentDb/botActions.js';
+import banCommand from '../src/commands/moderation/ban.js';
+import stickerCommand from '../src/commands/media/sticker.js';
+import { setCommands } from '../src/commands/registry.js';
+import { resetTriggerIndexForTests, validateRunnableCommandLine } from '../src/services/agentDb/botActions.js';
 import { inferToolsFromQuestion, isAgentPlanJson } from '../src/services/agentDb/orchestrator.js';
 import { executeTool } from '../src/services/agentDb/tools.js';
 import type { ToolRequestContext } from '../src/services/agentDb/types.js';
@@ -35,26 +38,49 @@ describe('orchestrator helpers', () => {
     expect(isAgentPlanJson('{"step":"use_tools","tools":[]}')).toBe(true);
   });
 
-  it('infere ferramentas para pergunta sobre o bot', () => {
+  it('infere menu para pergunta sobre o que fazer no bot', () => {
     const tools = inferToolsFromQuestion('O que tem de bom pra fazer nesse bot?');
-    expect(tools.map((t) => t.tool)).toContain('get_my_missions');
-    expect(tools.map((t) => t.tool)).toContain('get_my_aura');
+    expect(tools).toEqual([{ tool: 'run_bot_command', args: { command: '!menu' } }]);
   });
 
   it('infere run_bot_command para figurinha com imagem', () => {
     const tools = inferToolsFromQuestion('Faz aí', 'image');
     expect(tools).toEqual([{ tool: 'run_bot_command', args: { command: '!sticker' } }]);
   });
+
+  it('infere !menu quando pedem o menu', () => {
+    const tools = inferToolsFromQuestion('@Breaker Bot me manda o menu aí, por favor');
+    expect(tools).toEqual([{ tool: 'run_bot_command', args: { command: '!menu' } }]);
+  });
 });
 
 describe('bot actions whitelist', () => {
+  beforeEach(() => {
+    resetTriggerIndexForTests();
+    setCommands([stickerCommand, banCommand]);
+  });
+
   it('permite !sticker', () => {
     const v = validateRunnableCommandLine('!sticker', ctx());
     expect(v.ok).toBe(true);
   });
 
-  it('bloqueia !ban', () => {
+  it('bloqueia !ban para não-admin', () => {
     const v = validateRunnableCommandLine('!ban @x', ctx());
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.result.code).toBe('forbidden');
+  });
+
+  it('permite !ban para admin em grupo', () => {
+    const v = validateRunnableCommandLine(
+      '!ban @x',
+      ctx({ isBotAdmin: true, chatKind: 'group', chatJid: GROUP, groupJid: GROUP }),
+    );
+    expect(v.ok).toBe(true);
+  });
+
+  it('bloqueia !oc para evitar loop', () => {
+    const v = validateRunnableCommandLine('!oc teste', ctx());
     expect(v.ok).toBe(false);
     if (!v.ok) expect(v.result.code).toBe('forbidden');
   });
