@@ -66,6 +66,13 @@ export interface OpenCodeConfig {
   adminTools: Record<string, boolean>;
   /** Na DM, exige @menção ao bot (padrão: false — no privado basta conversar). */
   requireMentionInDm: boolean;
+  /** Entrar na conversa do grupo sem menção (com sorteio + cooldown). */
+  proactiveEnabled: boolean;
+  /** Chance base (0–1) de considerar responder espontaneamente. */
+  proactiveChance: number;
+  /** Intervalo mínimo entre respostas espontâneas no mesmo grupo (ms). */
+  proactiveMinIntervalMs: number;
+  proactiveMinMessageLength: number;
 }
 
 export interface AgentDbConfig {
@@ -170,6 +177,13 @@ export const config: BotConfig = {
       write: true,
     }),
     requireMentionInDm: parseBoolean(process.env.OPENCODE_REQUIRE_MENTION_DM),
+    proactiveEnabled: parseBoolean(process.env.OPENCODE_PROACTIVE ?? 'true'),
+    proactiveChance: Math.min(
+      1,
+      Math.max(0, Number(process.env.OPENCODE_PROACTIVE_CHANCE ?? 0.07)),
+    ),
+    proactiveMinIntervalMs: Number(process.env.OPENCODE_PROACTIVE_COOLDOWN_MS ?? 180_000),
+    proactiveMinMessageLength: Number(process.env.OPENCODE_PROACTIVE_MIN_CHARS ?? 18),
   },
   agentDb: {
     enabled: parseBoolean(process.env.AI_AGENT_DB_ENABLED ?? 'true'),

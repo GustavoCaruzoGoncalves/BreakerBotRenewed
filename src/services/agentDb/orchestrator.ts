@@ -183,8 +183,8 @@ async function synthesizeAnswer(
     `Pergunta original:\n${userPrompt}\n\n` +
     (extraContext ? `Contexto do bot:\n${extraContext}\n\n` : '') +
     `Resultados das ferramentas (JSON):\n${JSON.stringify(toolResults)}\n\n` +
-    'Explique de forma amigável o que a pessoa pode fazer no bot, usando os dados acima quando relevante. ' +
-    'Se a pergunta for sobre funcionalidades, cite categorias (!menu, níveis, aura, truco, mídia, zueiras).';
+    'Responda de forma natural e direta, no tom do Breaker Bot. Use os dados das ferramentas só onde couber. ' +
+    'Não liste comandos nem dicas do bot a menos que a pergunta seja claramente sobre o que dá pra fazer aqui.';
 
   const tools = isAdmin ? config.opencode.adminTools : config.opencode.publicTools;
   return promptFinalAnswer(client, sessionId, system, synthesisPrompt, tools);
@@ -256,7 +256,6 @@ export async function runAgentWithDbTools(input: {
 
   return {
     ok: true,
-    text:
-      'Posso te ajudar com níveis, aura, truco, comandos de diversão e muito mais. Digite `!menu` para ver a lista completa ou me pergunte algo específico (por exemplo seu nível ou missões de aura).',
+    text: 'Hmm, não achei muita coisa no banco pra isso — reformula ou me manda outra?',
   };
 }

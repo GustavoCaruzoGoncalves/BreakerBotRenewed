@@ -17,6 +17,7 @@ import consentirCommand from './commands/memory/consentir.js';
 import meusdadosCommand from './commands/userdata/meusdados.js';
 import { recordIncomingMessage } from './services/memory/recorder.js';
 import { tryHandleAiMention } from './services/ai/mentionAssistant.js';
+import { tryProactiveGroupChat } from './services/ai/proactiveChat.js';
 import jokesCommand, { handleEmojiReaction } from './commands/fun/jokes.js';
 import pfpCommand from './commands/fun/pfp.js';
 import triviaCommand from './commands/fun/trivia.js';
@@ -237,7 +238,12 @@ export async function handle(sock: WASocket, msg: BotMessage): Promise<void> {
   if (await tryHandleAiMention(sock, msg)) return;
 
   const cmd = extractCommand(msg.text);
-  if (!cmd) return;
+  if (!cmd) {
+    void tryProactiveGroupChat(sock, msg).catch((err: unknown) =>
+      console.error('[AI-PROACTIVE]', getErrorMessage(err)),
+    );
+    return;
+  }
 
   const start = Date.now();
 

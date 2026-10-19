@@ -5,6 +5,8 @@ import * as memRepo from '../../database/memoryRepository.js';
 import { buildBotCapabilitiesPrompt } from '../agentDb/capabilities.js';
 import { isAgentPlanJson, runAgentWithDbTools } from '../agentDb/orchestrator.js';
 import type { ToolRequestContext } from '../agentDb/types.js';
+import { buildPersonalityPrompt, shouldSkipProactiveReply } from '../ai/personality.js';
+import type { AiInteractionMode } from '../ai/personality.js';
 import { buildAiContextAppend } from '../memory/context.js';
 import {
   checkOpencodeHealth,
@@ -65,6 +67,8 @@ export interface OpencodeChatInput {
   isAdmin: boolean;
   systemBase: string;
   toolContext?: ToolRequestContext;
+  interactionMode?: AiInteractionMode;
+  skipAgentDb?: boolean;
 }
 
 export interface OpencodeChatResult {
@@ -73,14 +77,14 @@ export interface OpencodeChatResult {
   unavailable?: boolean;
 }
 
-function defaultSystem(): string {
-  return (
-    'Você é o assistente de IA do BreakerBot no WhatsApp. Responda em português do Brasil, de forma clara e útil. ' +
-    'Use pesquisa na web quando precisar de informação atual ou fontes externas; cite links quando usar resultados da web. ' +
-    'Nunca responda com JSON de plano interno ou nomes de ferramentas — fale como pessoa. ' +
-    'Não execute ações destrutivas nem compartilhe segredos do servidor.\n\n' +
-    buildBotCapabilitiesPrompt()
-  );
+function composeSystem(input: OpencodeChatInput, memoryAppend: string): string {
+  const mode = input.interactionMode ?? 'direct';
+  const personality = input.systemBase.trim() || buildPersonalityPrompt(mode);
+  const capabilities =
+    !input.skipAgentDb && config.agentDb.enabled && mode === 'direct'
+      ? `\n\n${buildBotCapabilitiesPrompt()}`
+      : '';
+  return `${personality}${capabilities}${memoryAppend}`;
 }
 
 export async function chatWithOpencode(
@@ -110,9 +114,9 @@ export async function chatWithOpencode(
         promptText = `[Mensagem citada]\n${input.quotedText}\n\n[Pergunta]\n${input.userPrompt}`;
       }
 
-      const baseSystem = `${input.systemBase || defaultSystem()}${memoryAppend}`;
+      const baseSystem = composeSystem(input, memoryAppend);
 
-      if (config.agentDb.enabled && input.toolContext) {
+      if (config.agentDb.enabled && input.toolContext && !input.skipAgentDb) {
         const agentResult = await runAgentWithDbTools({
           client,
           sessionId,
@@ -164,8 +168,10 @@ export async function chatWithOpencode(
         return { ok: false, text: 'OpenCode não retornou texto na resposta.' };
       }
       if (isAgentPlanJson(text)) {
-        text =
-          'Use `!menu` para ver comandos ou me mencione com uma pergunta sobre nível, aura, truco ou missões.';
+        text = 'Perdeu no caminho — manda de novo?';
+      }
+      if (input.interactionMode === 'proactive' && shouldSkipProactiveReply(text)) {
+        return { ok: false, text: '' };
       }
 
       return { ok: true, text };
