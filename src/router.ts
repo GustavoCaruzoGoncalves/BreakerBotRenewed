@@ -16,6 +16,7 @@ import memoriaCommand from './commands/memory/memoria.js';
 import consentirCommand from './commands/memory/consentir.js';
 import meusdadosCommand from './commands/userdata/meusdados.js';
 import { recordIncomingMessage } from './services/memory/recorder.js';
+import { tryHandleAiMention } from './services/ai/mentionAssistant.js';
 import jokesCommand, { handleEmojiReaction } from './commands/fun/jokes.js';
 import pfpCommand from './commands/fun/pfp.js';
 import triviaCommand from './commands/fun/trivia.js';
@@ -232,6 +233,8 @@ export async function handle(sock: WASocket, msg: BotMessage): Promise<void> {
       handleEmojiReaction(sock, msg).catch(() => {});
     }
   }
+
+  if (await tryHandleAiMention(sock, msg)) return;
 
   const cmd = extractCommand(msg.text);
   if (!cmd) return;

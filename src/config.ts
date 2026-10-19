@@ -64,6 +64,8 @@ export interface OpenCodeConfig {
   publicTools: Record<string, boolean>;
   /** Ferramentas extras só para administradores (ex.: shell). */
   adminTools: Record<string, boolean>;
+  /** Na DM, exige @menção ao bot (padrão: false — no privado basta conversar). */
+  requireMentionInDm: boolean;
 }
 
 export interface AgentDbConfig {
@@ -167,6 +169,7 @@ export const config: BotConfig = {
       edit: true,
       write: true,
     }),
+    requireMentionInDm: parseBoolean(process.env.OPENCODE_REQUIRE_MENTION_DM),
   },
   agentDb: {
     enabled: parseBoolean(process.env.AI_AGENT_DB_ENABLED ?? 'true'),

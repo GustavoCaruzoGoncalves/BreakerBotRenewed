@@ -1,20 +1,10 @@
 import { config } from '../../config.js';
-import { getErrorMessage } from '../../lib/errors.js';
 import * as memRepo from '../../database/memoryRepository.js';
 import { buildDmThreadId, buildGroupThreadId } from '../../services/memory/logic.js';
-import { recordAssistantMessage } from '../../services/memory/recorder.js';
-import { buildToolContextFromMessage } from '../../services/agentDb/context.js';
-import { chatWithOpencode } from '../../services/opencode/service.js';
 import * as users from '../../services/users.js';
 import type { BotMessage, Command, CommandHandler, WASocket } from '../../types/bot.js';
 
 const RESET = '!resetOpencode';
-
-function extractPrompt(text: string): string | null {
-  if (text.startsWith('!oc ')) return text.slice(4).trim();
-  if (text.startsWith('!opencode ')) return text.slice('!opencode '.length).trim();
-  return null;
-}
 
 const handle: CommandHandler = async (sock, msg) => {
   const { text, jid, raw } = msg;
@@ -39,58 +29,33 @@ const handle: CommandHandler = async (sock, msg) => {
     return true;
   }
 
-  if (trimmed === '!opencode' || trimmed === '!oc') {
+  if (lower === '!ia') {
+    const where = jid.endsWith('@g.us') ? 'Mencione @Breaker Bot' : 'Envie sua pergunta aqui no privado';
     await sock.sendMessage(jid, {
-      text: '❌ Use `!opencode <pergunta>` (ou `!oc`) para conversar com o agente OpenCode.',
+      text:
+        `🤖 *IA do BreakerBot*\n\n${where} com sua pergunta.\n` +
+        'Ex.: _@Breaker Bot o que posso fazer neste bot?_\n\n`!menu` lista comandos com `!`.',
     });
     return true;
   }
 
-  const prompt = extractPrompt(trimmed);
-  if (prompt === null) return false;
-
-  if (!prompt) {
-    await sock.sendMessage(jid, { text: '❌ Digite uma pergunta junto com `!opencode`.' });
-    return true;
-  }
-
-  const sender = await users.resolveSender(raw);
-  if (!sender || users.isGroupUserId(sender)) {
-    await sock.sendMessage(jid, { text: '❌ Não foi possível identificar o remetente.' });
-    return true;
-  }
-
-  const quotedMsg = raw.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  const quotedText =
-    quotedMsg?.conversation || quotedMsg?.extendedTextMessage?.text || null;
-
-  const contextKey = jid.endsWith('@g.us') ? buildGroupThreadId(jid) : buildDmThreadId(sender);
-  const title = jid.endsWith('@g.us') ? `Grupo ${jid}` : `DM ${sender}`;
-
-  try {
-    const toolContext = await buildToolContextFromMessage(msg, sender);
-    const result = await chatWithOpencode({
-      contextKey,
-      sessionTitle: title,
-      chatJid: jid,
-      senderUserId: sender,
-      userPrompt: prompt,
-      quotedText,
-      isAdmin: config.admins.includes(sender),
-      systemBase: '',
-      toolContext,
+  if (
+    lower === '!opencode' ||
+    lower.startsWith('!opencode ') ||
+    lower === '!oc' ||
+    lower.startsWith('!oc ')
+  ) {
+    const where = jid.endsWith('@g.us') ? 'Mencione @Breaker Bot' : 'Envie sua pergunta no privado';
+    await sock.sendMessage(jid, {
+      text:
+        `🤖 A IA não usa mais \`!oc\` / \`!opencode\`.\n\n` +
+        `${where} com sua pergunta (ex.: o que posso fazer neste bot?).\n` +
+        'Comandos com `!` continuam iguais (`!menu`, `!gpt`, etc.).',
     });
-
-    await sock.sendMessage(jid, { text: result.text });
-    if (result.ok) {
-      await recordAssistantMessage(jid, sender, result.text);
-    }
-    return true;
-  } catch (err) {
-    console.error('[OPENCODE-CMD]', getErrorMessage(err));
-    await sock.sendMessage(jid, { text: 'Erro ao processar com OpenCode.' });
     return true;
   }
+
+  return false;
 };
 
 const opencodeCommand: Command = {
@@ -98,10 +63,15 @@ const opencodeCommand: Command = {
     category: 'IA',
     entries: [
       {
-        trigger: '!opencode',
-        aliases: ['!oc'],
-        description: 'Conversa com o agente OpenCode (memória persistente e pesquisa web)',
-        usages: [{ syntax: '!opencode <pergunta>', description: 'Pergunta em texto' }],
+        trigger: '!ia',
+        aliases: ['!opencode', '!oc'],
+        description: 'IA por menção: no grupo, mencione @Breaker Bot; no privado, converse normalmente',
+        usages: [
+          {
+            syntax: '@Breaker Bot <pergunta>',
+            description: 'No grupo, mencione o bot (substitui !oc)',
+          },
+        ],
       },
       {
         trigger: '!resetOpencode',

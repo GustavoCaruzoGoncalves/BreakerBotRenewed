@@ -1,6 +1,7 @@
 import type { OpencodeClient } from '@opencode-ai/sdk';
 import { config } from '../../config.js';
 import { extractTextFromParts, withTimeout } from '../opencode/client.js';
+import { buildBotCapabilitiesPrompt } from './capabilities.js';
 import { looksLikePromptInjection } from './policy.js';
 import { buildToolCatalogPrompt, executeToolBatch } from './tools.js';
 import type { AgentPlan, ToolCall, ToolName, ToolRequestContext } from './types.js';
@@ -20,6 +21,25 @@ const ALLOWED_TOOLS = new Set<string>([
   'lookup_users_public',
   'get_user_extended_stats',
 ]);
+
+const TOOL_ALIASES: Record<string, ToolName> = {
+  get_my_aura_summary: 'get_my_aura',
+  get_aura_summary: 'get_my_aura',
+  get_my_aura_stats: 'get_my_aura',
+  get_missions: 'get_my_missions',
+  get_my_stats: 'get_my_level_stats',
+  get_level: 'get_my_level_stats',
+};
+
+export function isAgentPlanJson(text: string): boolean {
+  const t = text.trim();
+  return t.startsWith('{') && t.includes('"step"') && (t.includes('use_tools') || t.includes('respond'));
+}
+
+function normalizeToolName(name: string): ToolName | null {
+  const mapped = TOOL_ALIASES[name] ?? name;
+  return ALLOWED_TOOLS.has(mapped) ? (mapped as ToolName) : null;
+}
 
 function parseJsonPlan(text: string): AgentPlan | null {
   const start = text.indexOf('{');
@@ -45,14 +65,47 @@ function sanitizePlan(raw: unknown): AgentPlan | null {
   for (const item of toolsRaw) {
     if (!item || typeof item !== 'object') continue;
     const t = item as Record<string, unknown>;
-    const name = String(t.tool ?? '');
-    if (!ALLOWED_TOOLS.has(name)) continue;
+    const normalized = normalizeToolName(String(t.tool ?? ''));
+    if (!normalized) continue;
     tools.push({
-      tool: name as ToolName,
+      tool: normalized,
       args: (t.args as Record<string, unknown>) ?? {},
     });
   }
   return { step: 'use_tools', tools };
+}
+
+export function inferToolsFromQuestion(question: string): ToolCall[] {
+  const lower = question.toLowerCase();
+  if (
+    /o que (tem|dá|da pra|posso)|funcionalidades|comandos|fazer (no|neste|nesse|na porra)|bot\?*$/.test(
+      lower,
+    ) ||
+    /tem de bom|o que (eu )?faço|como (usar|funciona)/.test(lower)
+  ) {
+    return [
+      { tool: 'get_my_level_stats', args: {} },
+      { tool: 'get_my_aura', args: {} },
+      { tool: 'get_my_missions', args: {} },
+    ];
+  }
+  if (/meu (nível|level|xp|prestígio)/.test(lower)) {
+    return [{ tool: 'get_my_level_stats', args: {} }];
+  }
+  if (/minha aura|meu aura|saldo de aura/.test(lower)) {
+    return [{ tool: 'get_my_aura', args: {} }];
+  }
+  if (/ranking|top \d|maior nível/.test(lower)) {
+    return [{ tool: 'get_level_ranking', args: { limit: 5 } }];
+  }
+  return [];
+}
+
+function sanitizeUserFacingText(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (isAgentPlanJson(trimmed)) return null;
+  return trimmed;
 }
 
 async function promptPlan(
@@ -63,9 +116,10 @@ async function promptPlan(
 ): Promise<AgentPlan | null> {
   const body: NonNullable<Parameters<OpencodeClient['session']['prompt']>[0]>['body'] = {
     agent: config.opencode.agent,
+    noReply: true,
     system:
       system +
-      '\n\nResponda SOMENTE com JSON válido no formato {"step":"respond","message":"..."} ou {"step":"use_tools","tools":[{"tool":"nome","args":{}}]}.',
+      '\n\n[Fase interna — não fale com o usuário.] Responda SOMENTE JSON: {"step":"respond","message":"..."} ou {"step":"use_tools","tools":[{"tool":"nome_exato","args":{}}]}. Use apenas nomes de ferramentas listados.',
     parts: [{ type: 'text', text: userText }],
   };
   if (config.opencode.modelProvider && config.opencode.modelId) {
@@ -95,7 +149,9 @@ async function promptFinalAnswer(
 ): Promise<string | null> {
   const body: NonNullable<Parameters<OpencodeClient['session']['prompt']>[0]>['body'] = {
     agent: config.opencode.agent,
-    system,
+    system:
+      system +
+      '\n\nResponda ao usuário em português natural. Nunca envie JSON, nomes de ferramentas ou planos internos.',
     tools: toolFlags,
     parts: [{ type: 'text', text: userText }],
   };
@@ -111,7 +167,27 @@ async function promptFinalAnswer(
     'OpenCode answer',
   );
   if (res.error) return null;
-  return extractTextFromParts(res.data?.parts) || null;
+  return sanitizeUserFacingText(extractTextFromParts(res.data?.parts) || '');
+}
+
+async function synthesizeAnswer(
+  client: OpencodeClient,
+  sessionId: string,
+  system: string,
+  userPrompt: string,
+  toolResults: Awaited<ReturnType<typeof executeToolBatch>>,
+  isAdmin: boolean,
+  extraContext?: string,
+): Promise<string | null> {
+  const synthesisPrompt =
+    `Pergunta original:\n${userPrompt}\n\n` +
+    (extraContext ? `Contexto do bot:\n${extraContext}\n\n` : '') +
+    `Resultados das ferramentas (JSON):\n${JSON.stringify(toolResults)}\n\n` +
+    'Explique de forma amigável o que a pessoa pode fazer no bot, usando os dados acima quando relevante. ' +
+    'Se a pergunta for sobre funcionalidades, cite categorias (!menu, níveis, aura, truco, mídia, zueiras).';
+
+  const tools = isAdmin ? config.opencode.adminTools : config.opencode.publicTools;
+  return promptFinalAnswer(client, sessionId, system, synthesisPrompt, tools);
 }
 
 export async function runAgentWithDbTools(input: {
@@ -133,44 +209,54 @@ export async function runAgentWithDbTools(input: {
     };
   }
 
+  const capabilities = buildBotCapabilitiesPrompt();
   const catalog = buildToolCatalogPrompt();
   const system =
     input.baseSystem +
+    '\n\n' +
+    capabilities +
     catalog +
-    '\n\nRegras: estatísticas do BreakerBot vêm das ferramentas, não da memória conversacional. ' +
-    'Se faltar dado, diga que não sabe.';
+    '\n\nRegras: estatísticas do BreakerBot vêm das ferramentas, não da memória conversacional.';
 
   const planPrompt =
     `Pergunta do usuário:\n${input.userPrompt}\n\n` +
     'Decida se precisa consultar ferramentas BreakerBot antes de responder.';
 
-  const plan = await promptPlan(input.client, input.sessionId, system, planPrompt);
+  let plan = await promptPlan(input.client, input.sessionId, system, planPrompt);
+
   if (!plan) {
-    return { ok: false, text: '' };
+    plan = { step: 'use_tools', tools: inferToolsFromQuestion(input.userPrompt) };
   }
 
   if (plan.step === 'respond' && plan.message?.trim()) {
-    return { ok: true, text: plan.message.trim() };
+    if (isAgentPlanJson(plan.message)) {
+      plan = parseJsonPlan(plan.message) ?? plan;
+    } else {
+      const safe = sanitizeUserFacingText(plan.message);
+      if (safe) return { ok: true, text: safe };
+    }
   }
 
-  const toolResults = plan.tools?.length
-    ? await executeToolBatch(plan.tools, input.toolContext)
+  let tools = plan.tools?.length ? plan.tools : inferToolsFromQuestion(input.userPrompt);
+  const toolResults = tools.length
+    ? await executeToolBatch(tools, input.toolContext)
     : [];
 
-  const synthesisPrompt =
-    `Pergunta original:\n${input.userPrompt}\n\n` +
-    `Resultados autorizados das ferramentas (JSON):\n${JSON.stringify(toolResults)}\n\n` +
-    'Responda em português, de forma natural, usando apenas estes dados para estatísticas.';
-
-  const tools = input.isAdmin ? config.opencode.adminTools : config.opencode.publicTools;
-  const answer = await promptFinalAnswer(
+  const answer = await synthesizeAnswer(
     input.client,
     input.sessionId,
     system,
-    synthesisPrompt,
-    tools,
+    input.userPrompt,
+    toolResults,
+    input.isAdmin,
+    capabilities,
   );
 
-  if (!answer) return { ok: false, text: '' };
-  return { ok: true, text: answer };
+  if (answer) return { ok: true, text: answer };
+
+  return {
+    ok: true,
+    text:
+      'Posso te ajudar com níveis, aura, truco, comandos de diversão e muito mais. Digite `!menu` para ver a lista completa ou me pergunte algo específico (por exemplo seu nível ou missões de aura).',
+  };
 }

@@ -2,7 +2,8 @@ import type { OpencodeClient } from '@opencode-ai/sdk';
 import { config } from '../../config.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import * as memRepo from '../../database/memoryRepository.js';
-import { runAgentWithDbTools } from '../agentDb/orchestrator.js';
+import { buildBotCapabilitiesPrompt } from '../agentDb/capabilities.js';
+import { isAgentPlanJson, runAgentWithDbTools } from '../agentDb/orchestrator.js';
 import type { ToolRequestContext } from '../agentDb/types.js';
 import { buildAiContextAppend } from '../memory/context.js';
 import {
@@ -72,10 +73,15 @@ export interface OpencodeChatResult {
   unavailable?: boolean;
 }
 
-const DEFAULT_SYSTEM =
-  'Você é o assistente de IA do BreakerBot no WhatsApp. Responda em português do Brasil, de forma clara e útil. ' +
-  'Use pesquisa na web quando precisar de informação atual ou fontes externas; cite links quando usar resultados da web. ' +
-  'Não execute ações destrutivas nem compartilhe segredos do servidor.';
+function defaultSystem(): string {
+  return (
+    'Você é o assistente de IA do BreakerBot no WhatsApp. Responda em português do Brasil, de forma clara e útil. ' +
+    'Use pesquisa na web quando precisar de informação atual ou fontes externas; cite links quando usar resultados da web. ' +
+    'Nunca responda com JSON de plano interno ou nomes de ferramentas — fale como pessoa. ' +
+    'Não execute ações destrutivas nem compartilhe segredos do servidor.\n\n' +
+    buildBotCapabilitiesPrompt()
+  );
+}
 
 export async function chatWithOpencode(
   input: OpencodeChatInput,
@@ -104,7 +110,7 @@ export async function chatWithOpencode(
         promptText = `[Mensagem citada]\n${input.quotedText}\n\n[Pergunta]\n${input.userPrompt}`;
       }
 
-      const baseSystem = `${input.systemBase || DEFAULT_SYSTEM}${memoryAppend}`;
+      const baseSystem = `${input.systemBase || defaultSystem()}${memoryAppend}`;
 
       if (config.agentDb.enabled && input.toolContext) {
         const agentResult = await runAgentWithDbTools({
@@ -153,9 +159,13 @@ export async function chatWithOpencode(
         return { ok: false, text: 'Erro ao processar com OpenCode.' };
       }
 
-      const text = extractTextFromParts(res.data?.parts);
+      let text = extractTextFromParts(res.data?.parts);
       if (!text) {
         return { ok: false, text: 'OpenCode não retornou texto na resposta.' };
+      }
+      if (isAgentPlanJson(text)) {
+        text =
+          'Use `!menu` para ver comandos ou me mencione com uma pergunta sobre nível, aura, truco ou missões.';
       }
 
       return { ok: true, text };

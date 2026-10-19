@@ -4,6 +4,7 @@ import {
   looksLikePromptInjection,
   stripUntrustedIdentityArgs,
 } from '../src/services/agentDb/policy.js';
+import { inferToolsFromQuestion, isAgentPlanJson } from '../src/services/agentDb/orchestrator.js';
 import { executeTool } from '../src/services/agentDb/tools.js';
 import type { ToolRequestContext } from '../src/services/agentDb/types.js';
 import * as readModels from '../src/services/agentDb/readModels.js';
@@ -27,6 +28,18 @@ function ctx(overrides: Partial<ToolRequestContext> = {}): ToolRequestContext {
     ...overrides,
   };
 }
+
+describe('orchestrator helpers', () => {
+  it('detecta JSON de plano vazando para o usuário', () => {
+    expect(isAgentPlanJson('{"step":"use_tools","tools":[]}')).toBe(true);
+  });
+
+  it('infere ferramentas para pergunta sobre o bot', () => {
+    const tools = inferToolsFromQuestion('O que tem de bom pra fazer nesse bot?');
+    expect(tools.map((t) => t.tool)).toContain('get_my_missions');
+    expect(tools.map((t) => t.tool)).toContain('get_my_aura');
+  });
+});
 
 describe('policy', () => {
   it('bloqueia ferramentas privadas de terceiros em grupo', () => {
