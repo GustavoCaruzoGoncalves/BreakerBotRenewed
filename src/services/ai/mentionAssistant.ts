@@ -1,6 +1,10 @@
 import { config } from '../../config.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { buildToolContextFromMessage } from '../agentDb/context.js';
+import {
+  buildMessageContextBlock,
+  mediaKindFromMessage,
+} from '../agentDb/messageContext.js';
 import { trackBotOutgoingMessage } from './botReplyIndex.js';
 import { buildPersonalityPrompt, humanizeAiText, shouldSkipProactiveReply } from './personality.js';
 import { buildDmThreadId, buildGroupThreadId } from '../memory/logic.js';
@@ -36,14 +40,20 @@ export async function runAiChat(
   const title = jid.endsWith('@g.us') ? `Grupo ${jid}` : `DM ${sender}`;
 
   try {
-    const toolContext =
-      options.skipAgentDb ? undefined : await buildToolContextFromMessage(msg, sender);
+    const toolContext = options.skipAgentDb
+      ? undefined
+      : {
+          ...(await buildToolContextFromMessage(msg, sender)),
+          actionDispatch: { sock, msg },
+        };
+    const messageContext = buildMessageContextBlock(msg);
     const result = await chatWithOpencode({
       contextKey,
       sessionTitle: title,
       chatJid: jid,
       senderUserId: sender,
-      userPrompt: prompt,
+      userPrompt: `${messageContext}\n\n${prompt}`,
+      mediaKind: mediaKindFromMessage(msg),
       quotedText,
       isAdmin: config.admins.includes(sender),
       systemBase: buildPersonalityPrompt(mode),
@@ -88,7 +98,10 @@ export async function tryHandleAiMention(sock: WASocket, msg: BotMessage): Promi
     return false;
   }
 
-  const prompt = extractPromptFromMentionText(msg.text);
+  let prompt = extractPromptFromMentionText(msg.text);
+  if (!prompt && msg.media) {
+    prompt = 'Faz o que pedi com a mídia que mandei.';
+  }
   if (!prompt) {
     await sock.sendMessage(msg.jid, { text: 'Fala — tô ouvindo. 😎' });
     return true;

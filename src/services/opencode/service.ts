@@ -7,6 +7,7 @@ import { isAgentPlanJson, runAgentWithDbTools } from '../agentDb/orchestrator.js
 import type { ToolRequestContext } from '../agentDb/types.js';
 import { buildPersonalityPrompt, shouldSkipProactiveReply } from '../ai/personality.js';
 import type { AiInteractionMode } from '../ai/personality.js';
+import type { MediaKind } from '../agentDb/messageContext.js';
 import { buildAiContextAppend } from '../memory/context.js';
 import {
   checkOpencodeHealth,
@@ -69,6 +70,7 @@ export interface OpencodeChatInput {
   toolContext?: ToolRequestContext;
   interactionMode?: AiInteractionMode;
   skipAgentDb?: boolean;
+  mediaKind?: MediaKind;
 }
 
 export interface OpencodeChatResult {
@@ -124,8 +126,9 @@ export async function chatWithOpencode(
           userPrompt: promptText,
           toolContext: input.toolContext,
           isAdmin: input.isAdmin,
+          mediaKind: input.mediaKind,
         });
-        if (agentResult.ok && agentResult.text.trim()) {
+        if (agentResult.ok) {
           return { ok: true, text: agentResult.text };
         }
       }

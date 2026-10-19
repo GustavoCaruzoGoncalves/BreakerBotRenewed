@@ -42,6 +42,7 @@ export function assertSelfTarget(targetUserId: string, ctx: ToolRequestContext):
 }
 
 export function canRunTool(tool: ToolName, ctx: ToolRequestContext): boolean {
+  if (tool === 'run_bot_command') return Boolean(ctx.actionDispatch);
   if (!isGroup(ctx)) return true;
   if (tool.startsWith('get_my_')) return SELF_GROUP_ALLOWED_TOOLS.has(tool);
   if (tool === 'get_user_extended_stats') return false;

@@ -73,11 +73,15 @@ export async function shouldActivateAiAssistant(
   requireMentionInDm: boolean,
 ): Promise<boolean> {
   if (msg.raw.key.fromMe) return false;
-  if (!msg.text?.trim()) return false;
-  if (msg.text.trim().startsWith('!')) return false;
+  if (msg.text?.trim().startsWith('!')) return false;
 
   const replyToBot = await isReplyToBotMessage(sock, msg);
-  if (replyToBot) return true;
+  if (replyToBot) {
+    if (msg.media || msg.text?.trim()) return true;
+    return false;
+  }
+
+  if (!msg.text?.trim()) return false;
 
   const isGroup = msg.jid.endsWith('@g.us');
   if (isGroup) return isBotMentioned(sock, msg);

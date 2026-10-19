@@ -11,6 +11,7 @@ import {
   scopeForExtendedTool,
   stripUntrustedIdentityArgs,
 } from './policy.js';
+import { dispatchBotCommand } from './botActions.js';
 import type { ConsentScope, ToolCall, ToolName, ToolRequestContext, ToolResult } from './types.js';
 
 const MAX_CALLS_PER_MINUTE = 30;
@@ -40,6 +41,11 @@ export const TOOL_CATALOG: ReadonlyArray<{ name: ToolName; description: string }
     name: 'get_user_extended_stats',
     description:
       'Perfil estendido de usuário mencionado; exige consentimento do titular se não for o solicitante.',
+  },
+  {
+    name: 'run_bot_command',
+    description:
+      'Executa um comando real do BreakerBot (ex.: !sticker com mídia já anexa). Args: { "command": "!sticker" } — pode incluir argumentos após o gatilho.',
   },
 ];
 
@@ -238,6 +244,17 @@ export async function executeTool(
         if (!data) return { ok: false, code: 'not_found', message: 'Usuário não encontrado.' };
         return { ok: true, data };
       }
+      case 'run_bot_command': {
+        const dispatch = ctx.actionDispatch;
+        if (!dispatch) {
+          return { ok: false, code: 'internal_error', message: 'Ações indisponíveis neste contexto.' };
+        }
+        const command = String(args.command ?? '').trim();
+        if (!command) {
+          return { ok: false, code: 'invalid_args', message: 'Informe args.command (ex.: "!sticker").' };
+        }
+        return dispatchBotCommand(dispatch.sock, dispatch.msg, command, ctx);
+      }
       default:
         return { ok: false, code: 'forbidden', message: 'Ferramenta desconhecida.' };
     }
@@ -263,8 +280,10 @@ export function buildToolCatalogPrompt(): string {
   if (!config.agentDb?.enabled) return '';
   const lines = TOOL_CATALOG.map((t) => `- ${t.name}: ${t.description}`);
   return (
-    '\n\nFerramentas BreakerBot (somente leitura; o backend valida identidade e permissões):\n' +
+    '\n\nFerramentas BreakerBot (leitura + ações; o backend valida identidade e permissões):\n' +
     lines.join('\n') +
-    '\nPara usá-las, responda JSON no formato do plano (step=use_tools). Nunca invente estatísticas: use resultados das ferramentas.'
+    '\nPara usá-las, responda JSON no formato do plano (step=use_tools). ' +
+    'Para figurinha com mídia já na mensagem, prefira run_bot_command com !sticker ou !fsticker. ' +
+    'Nunca invente estatísticas: use resultados das ferramentas.'
   );
 }

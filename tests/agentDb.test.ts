@@ -4,6 +4,7 @@ import {
   looksLikePromptInjection,
   stripUntrustedIdentityArgs,
 } from '../src/services/agentDb/policy.js';
+import { validateRunnableCommandLine } from '../src/services/agentDb/botActions.js';
 import { inferToolsFromQuestion, isAgentPlanJson } from '../src/services/agentDb/orchestrator.js';
 import { executeTool } from '../src/services/agentDb/tools.js';
 import type { ToolRequestContext } from '../src/services/agentDb/types.js';
@@ -39,6 +40,24 @@ describe('orchestrator helpers', () => {
     expect(tools.map((t) => t.tool)).toContain('get_my_missions');
     expect(tools.map((t) => t.tool)).toContain('get_my_aura');
   });
+
+  it('infere run_bot_command para figurinha com imagem', () => {
+    const tools = inferToolsFromQuestion('Faz aí', 'image');
+    expect(tools).toEqual([{ tool: 'run_bot_command', args: { command: '!sticker' } }]);
+  });
+});
+
+describe('bot actions whitelist', () => {
+  it('permite !sticker', () => {
+    const v = validateRunnableCommandLine('!sticker', ctx());
+    expect(v.ok).toBe(true);
+  });
+
+  it('bloqueia !ban', () => {
+    const v = validateRunnableCommandLine('!ban @x', ctx());
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.result.code).toBe('forbidden');
+  });
 });
 
 describe('policy', () => {
@@ -46,6 +65,11 @@ describe('policy', () => {
     const g = ctx({ chatKind: 'group', chatJid: GROUP, groupJid: GROUP });
     expect(canRunTool('get_my_missions', g)).toBe(false);
     expect(canRunTool('get_my_level_stats', g)).toBe(true);
+  });
+
+  it('run_bot_command exige actionDispatch', () => {
+    expect(canRunTool('run_bot_command', ctx())).toBe(false);
+    expect(canRunTool('run_bot_command', ctx({ actionDispatch: {} as never }))).toBe(true);
   });
 
   it('remove identidade não confiável dos args', () => {

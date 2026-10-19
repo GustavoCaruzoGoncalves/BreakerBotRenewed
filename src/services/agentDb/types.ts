@@ -1,3 +1,5 @@
+import type { BotMessage, WASocket } from '../../types/bot.js';
+
 /** Contexto confiável — sempre montado pelo bot a partir da mensagem Baileys. */
 export interface ToolRequestContext {
   requestId: string;
@@ -10,6 +12,11 @@ export interface ToolRequestContext {
   waMessageId: string | null;
   /** IDs canônicos resolvidos a partir de menções na mensagem (nunca do modelo). */
   mentionedUserIds: readonly string[];
+  /** Preenchido pelo backend para run_bot_command; nunca confiar em dados do modelo. */
+  actionDispatch?: {
+    sock: WASocket;
+    msg: BotMessage;
+  };
 }
 
 export type ConsentScope =
@@ -32,7 +39,8 @@ export type ToolName =
   | 'get_truco_ranking'
   | 'get_mentioned_user_public_stats'
   | 'lookup_users_public'
-  | 'get_user_extended_stats';
+  | 'get_user_extended_stats'
+  | 'run_bot_command';
 
 export interface ToolCall {
   tool: ToolName;

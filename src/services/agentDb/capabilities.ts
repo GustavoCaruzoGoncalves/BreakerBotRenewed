@@ -11,7 +11,7 @@ export function buildBotCapabilitiesPrompt(): string {
     '- Níveis/XP: mensagens ganham XP, `!level`, `!ranking`, prestígio',
     '- Aura: missões diárias, duelos (!mog), ranking de aura' + (config.aura.enabled ? ' (ativo)' : ' (desativado no servidor)'),
     '- Truco paulista em grupos: comandos do módulo Truco (!truco etc.)',
-    '- Mídia: figurinhas, áudio',
+    '- Mídia: figurinhas (!sticker / !fsticker), áudio; a IA pode executar alguns comandos por você',
     '- Zueiras: trivia, amigo secreto, piadas, etc.',
     '- IA: mencione o bot no grupo; no privado basta conversar',
     '- Memória pessoal: `!memoria`, `!esquecer`',

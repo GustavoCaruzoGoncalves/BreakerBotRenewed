@@ -4,7 +4,8 @@ import { extractTextFromParts, withTimeout } from '../opencode/client.js';
 import { buildBotCapabilitiesPrompt } from './capabilities.js';
 import { looksLikePromptInjection } from './policy.js';
 import { buildToolCatalogPrompt, executeToolBatch } from './tools.js';
-import type { AgentPlan, ToolCall, ToolName, ToolRequestContext } from './types.js';
+import type { MediaKind } from './messageContext.js';
+import type { AgentPlan, ToolCall, ToolName, ToolRequestContext, ToolResult } from './types.js';
 
 const ALLOWED_TOOLS = new Set<string>([
   'get_my_level_stats',
@@ -20,6 +21,7 @@ const ALLOWED_TOOLS = new Set<string>([
   'get_mentioned_user_public_stats',
   'lookup_users_public',
   'get_user_extended_stats',
+  'run_bot_command',
 ]);
 
 const TOOL_ALIASES: Record<string, ToolName> = {
@@ -75,8 +77,39 @@ function sanitizePlan(raw: unknown): AgentPlan | null {
   return { step: 'use_tools', tools };
 }
 
-export function inferToolsFromQuestion(question: string): ToolCall[] {
+function actionExecutedInResults(
+  toolResults: Array<{ tool: ToolName; result: ToolResult }>,
+): boolean {
+  return toolResults.some(
+    (t) =>
+      t.tool === 'run_bot_command' &&
+      t.result.ok &&
+      typeof t.result.data === 'object' &&
+      t.result.data !== null &&
+      (t.result.data as { executed?: boolean }).executed === true,
+  );
+}
+
+export function inferToolsFromQuestion(question: string, mediaKind: MediaKind = null): ToolCall[] {
   const lower = question.toLowerCase();
+
+  if (mediaKind === 'sticker' && /png|imagem|toimg|converter/.test(lower)) {
+    return [{ tool: 'run_bot_command', args: { command: '!toimg' } }];
+  }
+  if (
+    (mediaKind === 'image' || mediaKind === 'video') &&
+    /figurin|sticker|fsticker|converte|transforma|faz(\s*a[ií])?|manda(\s*a[ií])?|cria/.test(lower)
+  ) {
+    const cmd = /fsticker|fundo transparente|inteir/.test(lower) ? '!fsticker' : '!sticker';
+    return [{ tool: 'run_bot_command', args: { command: cmd } }];
+  }
+  if (
+    (mediaKind === 'image' || mediaKind === 'video') &&
+    (lower.length < 24 || !/\?/.test(lower))
+  ) {
+    return [{ tool: 'run_bot_command', args: { command: '!sticker' } }];
+  }
+
   if (
     /o que (tem|dá|da pra|posso)|funcionalidades|comandos|fazer (no|neste|nesse|na porra)|bot\?*$/.test(
       lower,
@@ -197,6 +230,7 @@ export async function runAgentWithDbTools(input: {
   userPrompt: string;
   toolContext: ToolRequestContext;
   isAdmin: boolean;
+  mediaKind?: MediaKind;
 }): Promise<{ ok: boolean; text: string }> {
   if (!config.agentDb.enabled) {
     return { ok: false, text: '' };
@@ -216,19 +250,28 @@ export async function runAgentWithDbTools(input: {
     '\n\n' +
     capabilities +
     catalog +
-    '\n\nRegras: estatísticas do BreakerBot vêm das ferramentas, não da memória conversacional.';
+    '\n\nRegras: estatísticas do BreakerBot vêm das ferramentas, não da memória conversacional. ' +
+    'Se o usuário pedir uma ação (figurinha, ranking, menu etc.) e houver mídia ou comando aplicável, use run_bot_command em vez de só explicar como usar.';
 
   const planPrompt =
     `Pergunta do usuário:\n${input.userPrompt}\n\n` +
-    'Decida se precisa consultar ferramentas BreakerBot antes de responder.';
+    'Decida se precisa consultar ferramentas ou executar run_bot_command antes de responder.';
 
   let plan = await promptPlan(input.client, input.sessionId, system, planPrompt);
 
   if (!plan) {
-    plan = { step: 'use_tools', tools: inferToolsFromQuestion(input.userPrompt) };
+    plan = {
+      step: 'use_tools',
+      tools: inferToolsFromQuestion(input.userPrompt, input.mediaKind ?? null),
+    };
   }
 
-  if (plan.step === 'respond' && plan.message?.trim()) {
+  const inferredActions = inferToolsFromQuestion(input.userPrompt, input.mediaKind ?? null);
+  const hasInferredAction = inferredActions.some((t) => t.tool === 'run_bot_command');
+
+  if (plan.step === 'respond' && hasInferredAction) {
+    plan = { step: 'use_tools', tools: inferredActions };
+  } else if (plan.step === 'respond' && plan.message?.trim()) {
     if (isAgentPlanJson(plan.message)) {
       plan = parseJsonPlan(plan.message) ?? plan;
     } else {
@@ -237,10 +280,16 @@ export async function runAgentWithDbTools(input: {
     }
   }
 
-  let tools = plan.tools?.length ? plan.tools : inferToolsFromQuestion(input.userPrompt);
+  let tools = plan.tools?.length
+    ? plan.tools
+    : inferToolsFromQuestion(input.userPrompt, input.mediaKind ?? null);
   const toolResults = tools.length
     ? await executeToolBatch(tools, input.toolContext)
     : [];
+
+  if (actionExecutedInResults(toolResults)) {
+    return { ok: true, text: '' };
+  }
 
   const answer = await synthesizeAnswer(
     input.client,
