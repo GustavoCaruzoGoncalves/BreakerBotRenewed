@@ -1,7 +1,8 @@
 import { config } from '../../config.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { buildToolContextFromMessage } from '../agentDb/context.js';
-import { buildPersonalityPrompt, shouldSkipProactiveReply } from './personality.js';
+import { trackBotOutgoingMessage } from './botReplyIndex.js';
+import { buildPersonalityPrompt, humanizeAiText, shouldSkipProactiveReply } from './personality.js';
 import { buildDmThreadId, buildGroupThreadId } from '../memory/logic.js';
 import { recordAssistantMessage } from '../memory/recorder.js';
 import { chatWithOpencode } from '../opencode/service.js';
@@ -55,11 +56,14 @@ export async function runAiChat(
       return false;
     }
 
-    if (!result.text.trim()) return false;
+    const outgoing = humanizeAiText(result.text);
+    if (!outgoing) return false;
 
-    await sock.sendMessage(msg.jid, { text: result.text });
+    const sent = await sock.sendMessage(msg.jid, { text: outgoing });
+    const waId = sent?.key?.id ?? undefined;
+    trackBotOutgoingMessage(jid, waId ?? null);
     if (result.ok) {
-      await recordAssistantMessage(jid, sender, result.text);
+      await recordAssistantMessage(jid, sender, outgoing, waId);
     }
     return true;
   } catch (err) {
@@ -75,7 +79,7 @@ export async function runAiChat(
 export async function tryHandleAiMention(sock: WASocket, msg: BotMessage): Promise<boolean> {
   if (!config.opencode.enabled) return false;
 
-  if (!shouldActivateAiAssistant(sock, msg, config.opencode.requireMentionInDm)) {
+  if (!(await shouldActivateAiAssistant(sock, msg, config.opencode.requireMentionInDm))) {
     return false;
   }
 

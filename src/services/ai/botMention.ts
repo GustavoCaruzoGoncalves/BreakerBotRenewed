@@ -1,6 +1,8 @@
 import { areJidsSameUser } from '@whiskeysockets/baileys';
 import type { WASocket } from '@whiskeysockets/baileys';
+import * as memRepo from '../../database/memoryRepository.js';
 import type { BotMessage } from '../../types/bot.js';
+import { isTrackedBotMessage } from './botReplyIndex.js';
 
 function contextInfo(msg: BotMessage) {
   const m = msg.raw.message;
@@ -32,14 +34,50 @@ export function extractPromptFromMentionText(text: string): string {
     .trim();
 }
 
-export function shouldActivateAiAssistant(
+function quotedStanzaId(msg: BotMessage): string | null {
+  const ctx = contextInfo(msg);
+  return ctx?.stanzaId ?? null;
+}
+
+function isQuotedParticipantBot(sock: WASocket, msg: BotMessage): boolean {
+  const me = sock.user?.id;
+  if (!me) return false;
+  const participant = contextInfo(msg)?.participant;
+  if (!participant) return false;
+  if (areJidsSameUser(participant, me)) return true;
+  if (sock.user?.lid && areJidsSameUser(participant, sock.user.lid)) return true;
+  return false;
+}
+
+/** Resposta (quote) a uma mensagem enviada pelo bot. */
+export async function isReplyToBotMessage(sock: WASocket, msg: BotMessage): Promise<boolean> {
+  const ctx = contextInfo(msg);
+  if (!ctx?.quotedMessage && !ctx?.stanzaId) return false;
+
+  if (isQuotedParticipantBot(sock, msg)) return true;
+
+  const stanzaId = quotedStanzaId(msg);
+  if (!stanzaId) return false;
+  if (isTrackedBotMessage(msg.jid, stanzaId)) return true;
+
+  try {
+    return await memRepo.isAssistantMessageInChat(msg.jid, stanzaId);
+  } catch {
+    return false;
+  }
+}
+
+export async function shouldActivateAiAssistant(
   sock: WASocket,
   msg: BotMessage,
   requireMentionInDm: boolean,
-): boolean {
+): Promise<boolean> {
   if (msg.raw.key.fromMe) return false;
   if (!msg.text?.trim()) return false;
   if (msg.text.trim().startsWith('!')) return false;
+
+  const replyToBot = await isReplyToBotMessage(sock, msg);
+  if (replyToBot) return true;
 
   const isGroup = msg.jid.endsWith('@g.us');
   if (isGroup) return isBotMentioned(sock, msg);

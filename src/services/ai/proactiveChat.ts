@@ -1,7 +1,7 @@
 import { config } from '../../config.js';
 import type { BotMessage, WASocket } from '../../types/bot.js';
 import * as users from '../users.js';
-import { isBotMentioned } from './botMention.js';
+import { isBotMentioned, isReplyToBotMessage } from './botMention.js';
 import { runAiChat } from './mentionAssistant.js';
 
 const lastReplyByChat = new Map<string, number>();
@@ -40,6 +40,7 @@ export async function tryProactiveGroupChat(sock: WASocket, msg: BotMessage): Pr
   if (msg.raw.key.fromMe) return false;
   if (!msg.text?.trim() || msg.text.trim().startsWith('!')) return false;
   if (isBotMentioned(sock, msg)) return false;
+  if (await isReplyToBotMessage(sock, msg)) return false;
   if (!cooldownOk(msg.jid)) return false;
   if (!isProactiveCandidate(msg.text)) return false;
 

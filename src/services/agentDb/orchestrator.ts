@@ -151,7 +151,7 @@ async function promptFinalAnswer(
     agent: config.opencode.agent,
     system:
       system +
-      '\n\nResponda ao usuário em português natural. Nunca envie JSON, nomes de ferramentas ou planos internos.',
+      '\n\nResponda em português coloquial de WhatsApp. Sem travessão (—), sem bullets, sem JSON ou nomes de ferramentas.',
     tools: toolFlags,
     parts: [{ type: 'text', text: userText }],
   };

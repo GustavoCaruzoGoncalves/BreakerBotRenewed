@@ -119,6 +119,19 @@ export interface InsertChatMessageInput {
   isFromBot?: boolean;
 }
 
+export async function isAssistantMessageInChat(
+  chatJid: string,
+  waMessageId: string,
+): Promise<boolean> {
+  const r = await query<{ id: number }>(
+    `SELECT id FROM ai_chat_messages
+     WHERE chat_jid = $1 AND wa_message_id = $2 AND is_from_bot = true
+     LIMIT 1`,
+    [chatJid, waMessageId],
+  );
+  return r.rows.length > 0;
+}
+
 export async function insertChatMessage(input: InsertChatMessageInput): Promise<boolean> {
   const r = await query(
     `INSERT INTO ai_chat_messages (
