@@ -1,5 +1,5 @@
 import { query, getClient } from './pool.js';
-import type { HeuristicMemory } from '../services/memory/logic.js';
+import { buildGroupThreadId, type HeuristicMemory } from '../services/memory/logic.js';
 
 export interface MemorySettingsRow {
   user_id: string;
@@ -245,6 +245,55 @@ export async function saveOpencodeSessionId(
 
 export async function deleteOpencodeSessionMapping(contextKey: string): Promise<void> {
   await query('DELETE FROM ai_opencode_sessions WHERE context_key = $1', [contextKey]);
+}
+
+export interface PurgeGroupChatMemoryResult {
+  chatMessagesDeleted: number;
+  memoriesPurged: number;
+}
+
+/** Apaga histórico do grupo no PostgreSQL, memórias extraídas deste chat e mapeamento OpenCode. */
+export async function purgeGroupChatMemory(groupJid: string): Promise<PurgeGroupChatMemoryResult> {
+  if (!groupJid.endsWith('@g.us')) {
+    throw new Error('purgeGroupChatMemory exige JID de grupo (@g.us)');
+  }
+
+  const threadId = buildGroupThreadId(groupJid);
+  const client = await getClient();
+  let chatMessagesDeleted = 0;
+  let memoriesPurged = 0;
+
+  try {
+    await client.query('BEGIN');
+    const msgRes = await client.query(
+      `DELETE FROM ai_chat_messages WHERE thread_id = $1 OR chat_jid = $2`,
+      [threadId, groupJid],
+    );
+    chatMessagesDeleted = msgRes.rowCount ?? 0;
+
+    const memRes = await client.query(
+      `UPDATE ai_user_memories SET deleted_at = NOW(), updated_at = NOW()
+       WHERE source_thread_id = $1 AND deleted_at IS NULL`,
+      [threadId],
+    );
+    memoriesPurged = memRes.rowCount ?? 0;
+
+    await client.query(
+      `UPDATE ai_conversation_threads SET updated_at = NOW() WHERE thread_id = $1`,
+      [threadId],
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  await deleteOpencodeSessionMapping(threadId);
+
+  return { chatMessagesDeleted, memoriesPurged };
 }
 
 export async function migrateMemoryUserId(oldId: string, newId: string): Promise<void> {

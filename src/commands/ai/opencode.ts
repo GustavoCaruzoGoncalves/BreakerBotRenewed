@@ -5,6 +5,22 @@ import * as users from '../../services/users.js';
 import type { BotMessage, Command, CommandHandler, WASocket } from '../../types/bot.js';
 
 const RESET = '!resetOpencode';
+const PURGE_GROUP = '!limparMemoriaGrupo';
+
+async function requireBotAdmin(
+  sock: WASocket,
+  jid: string,
+  raw: BotMessage['raw'],
+): Promise<string | null> {
+  const sender =
+    (await users.resolveSender(raw)) ??
+    (jid.endsWith('@g.us') ? raw.key.participantAlt || raw.key.participant || jid : jid);
+  if (!config.admins.includes(sender)) {
+    await sock.sendMessage(jid, { text: '❌ Somente administradores do bot podem usar este comando.' });
+    return null;
+  }
+  return sender;
+}
 
 const handle: CommandHandler = async (sock, msg) => {
   const { text, jid, raw } = msg;
@@ -13,16 +29,36 @@ const handle: CommandHandler = async (sock, msg) => {
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
 
-  if (lower === RESET || lower.startsWith(`${RESET} `)) {
-    const sender =
-      (await users.resolveSender(raw)) ??
-      (jid.endsWith('@g.us') ? raw.key.participantAlt || raw.key.participant || jid : jid);
-    if (!config.admins.includes(sender)) {
+  if (
+    lower === PURGE_GROUP ||
+    lower.startsWith(`${PURGE_GROUP} `) ||
+    lower === '!resetmemoriagrupo' ||
+    lower.startsWith('!resetmemoriagrupo ')
+  ) {
+    if (!jid.endsWith('@g.us')) {
       await sock.sendMessage(jid, {
-        text: '❌ Somente administradores podem resetar a sessão OpenCode.',
+        text: '❌ Este comando só funciona dentro de um grupo (limpa o contexto da IA neste chat).',
       });
       return true;
     }
+    const admin = await requireBotAdmin(sock, jid, raw);
+    if (!admin) return true;
+
+    const { chatMessagesDeleted, memoriesPurged } = await memRepo.purgeGroupChatMemory(jid);
+    await sock.sendMessage(jid, {
+      text:
+        '🧹 *Memória deste grupo limpa*\n\n' +
+        'A IA (OpenCode) não vai mais usar o histórico antigo deste chat nem memórias extraídas daqui.\n' +
+        'Na próxima menção, uma sessão OpenCode nova será criada.\n\n' +
+        `• Mensagens apagadas: ${chatMessagesDeleted}\n` +
+        `• Memórias pessoais derivadas deste grupo: ${memoriesPurged}`,
+    });
+    return true;
+  }
+
+  if (lower === RESET || lower.startsWith(`${RESET} `)) {
+    const sender = await requireBotAdmin(sock, jid, raw);
+    if (!sender) return true;
     const contextKey = jid.endsWith('@g.us') ? buildGroupThreadId(jid) : buildDmThreadId(sender);
     await memRepo.deleteOpencodeSessionMapping(contextKey);
     await sock.sendMessage(jid, { text: '✅ Sessão OpenCode deste chat resetada.' });
@@ -75,7 +111,14 @@ const opencodeCommand: Command = {
       },
       {
         trigger: '!resetOpencode',
-        description: 'Reseta a sessão OpenCode deste chat (admin)',
+        description: 'Reseta só o vínculo da sessão OpenCode (admin; histórico PG permanece)',
+        admin: true,
+      },
+      {
+        trigger: '!limparMemoriaGrupo',
+        aliases: ['!resetMemoriaGrupo'],
+        description:
+          'Apaga histórico e memórias da IA deste grupo + nova sessão OpenCode (admin, só em grupo)',
         admin: true,
       },
     ],

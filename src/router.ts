@@ -33,6 +33,8 @@ import * as auraSvc from './services/aura.js';
 import utilityCommand from './commands/utility/util.js';
 import banCommand from './commands/moderation/ban.js';
 import trucoCommand from './commands/games/truco.js';
+import personalidadeCommand from './commands/admin/personalidade.js';
+import { trackGroupChatActivity } from './services/groups/trackGroup.js';
 
 import { setCommands } from './commands/registry.js';
 import type { BotMessage, Command, ReactionEvent, WASocket } from './types/bot.js';
@@ -57,6 +59,7 @@ const commands: Command[] = [
   trucoCommand,
   utilityCommand,
   banCommand,
+  personalidadeCommand,
   levelCommand,
   ...(config.aura.enabled ? [auraCommand] : []),
 ];
@@ -212,6 +215,10 @@ async function processXP(sock: WASocket, msg: BotMessage): Promise<void> {
 
 export async function handle(sock: WASocket, msg: BotMessage): Promise<void> {
   await ensureSender(msg, sock);
+
+  if (msg.jid.endsWith('@g.us')) {
+    trackGroupChatActivity(sock, msg.jid);
+  }
 
   recordIncomingMessage(sock, msg).catch((err: unknown) =>
     console.error('[MEMORY] Erro:', getErrorMessage(err)),

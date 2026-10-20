@@ -15,6 +15,7 @@ export function buildBotCapabilitiesPrompt(): string {
     '- Zueiras: trivia, amigo secreto, piadas, etc.',
     '- IA: mencione o bot no grupo; no privado basta conversar',
     '- Memória pessoal: `!memoria`, `!esquecer`',
+    '- Personalidade da IA por grupo (admins): `!personalidade`',
     '- Preferências: menções, nome customizado',
   ];
 

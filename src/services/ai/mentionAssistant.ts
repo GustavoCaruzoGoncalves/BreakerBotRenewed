@@ -6,7 +6,11 @@ import {
   mediaKindFromMessage,
 } from '../agentDb/messageContext.js';
 import { trackBotOutgoingMessage } from './botReplyIndex.js';
-import { buildPersonalityPrompt, humanizeAiText, shouldSkipProactiveReply } from './personality.js';
+import {
+  buildPersonalityPromptForChat,
+  humanizeAiText,
+  shouldSkipProactiveReply,
+} from './personality.js';
 import { buildDmThreadId, buildGroupThreadId } from '../memory/logic.js';
 import { recordAssistantMessage } from '../memory/recorder.js';
 import { chatWithOpencode } from '../opencode/service.js';
@@ -56,7 +60,7 @@ export async function runAiChat(
       mediaKind: mediaKindFromMessage(msg),
       quotedText,
       isAdmin: config.admins.includes(sender),
-      systemBase: buildPersonalityPrompt(mode),
+      systemBase: await buildPersonalityPromptForChat(jid, mode),
       toolContext,
       interactionMode: mode,
       skipAgentDb: options.skipAgentDb,
