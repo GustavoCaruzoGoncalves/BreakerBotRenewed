@@ -60,6 +60,12 @@ export interface OpenCodeConfig {
   modelProvider: string;
   modelId: string;
   timeoutMs: number;
+  /** Tempo sem @ após menção/resposta ao bot antes de expirar a thread de conversa. */
+  conversationThreadTtlMs: number;
+  /** Envia imagem, figurinha e vídeo curto ao modelo multimodal. */
+  visionEnabled: boolean;
+  visionMaxBytes: number;
+  visionVideoMaxBytes: number;
   /** Ferramentas habilitadas para usuários comuns (pesquisa/leitura). */
   publicTools: Record<string, boolean>;
   /** Ferramentas extras só para administradores (ex.: shell). */
@@ -154,6 +160,10 @@ export const config: BotConfig = {
     modelProvider: process.env.OPENCODE_MODEL_PROVIDER ?? '',
     modelId: process.env.OPENCODE_MODEL ?? process.env.OPENCODE_MODEL_ID ?? '',
     timeoutMs: Number(process.env.OPENCODE_TIMEOUT_MS ?? 120_000),
+    conversationThreadTtlMs: Number(process.env.OPENCODE_CONVERSATION_THREAD_TTL_MS ?? 900_000),
+    visionEnabled: parseBoolean(process.env.OPENCODE_VISION_ENABLED ?? 'true'),
+    visionMaxBytes: Number(process.env.OPENCODE_VISION_MAX_BYTES ?? 5 * 1024 * 1024),
+    visionVideoMaxBytes: Number(process.env.OPENCODE_VISION_VIDEO_MAX_BYTES ?? 20 * 1024 * 1024),
     publicTools: parseToolMap(process.env.OPENCODE_PUBLIC_TOOLS, {
       websearch: true,
       webfetch: true,

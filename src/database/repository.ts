@@ -764,6 +764,46 @@ export interface PublicUserLookupRow {
   xp: number;
 }
 
+export async function findUsersByExactDisplayName(
+  displayName: string,
+  limit = 2,
+): Promise<PublicUserLookupRow[]> {
+  const q = displayName.trim();
+  if (!q) return [];
+  const capped = Math.min(Math.max(limit, 1), 5);
+  const r = await query<{
+    user_id: string;
+    level: number | null;
+    xp: number | null;
+    display_name: string;
+  }>(
+    `SELECT u.user_id,
+            u.level,
+            u.xp,
+            COALESCE(
+              NULLIF(CASE WHEN u.custom_name_enabled THEN u.custom_name END, ''),
+              NULLIF(u.push_name, ''),
+              split_part(u.user_id, '@', 1)
+            ) AS display_name
+     FROM users u
+     WHERE u.user_id NOT LIKE '%@g.us'
+       AND lower(trim(COALESCE(
+             NULLIF(CASE WHEN u.custom_name_enabled THEN u.custom_name END, ''),
+             NULLIF(u.push_name, ''),
+             split_part(u.user_id, '@', 1)
+           ))) = lower(trim($1))
+     ORDER BY u.total_messages DESC, u.level DESC
+     LIMIT $2`,
+    [q, capped],
+  );
+  return r.rows.map((row) => ({
+    userId: row.user_id,
+    displayName: row.display_name,
+    level: row.level ?? 1,
+    xp: row.xp ?? 0,
+  }));
+}
+
 export async function searchUsersByDisplayName(
   queryText: string,
   limit = 3,

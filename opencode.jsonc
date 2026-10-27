@@ -1,0 +1,5 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Modelo gratuito do OpenCode Console (pay-as-you-go $0)
+  "model": "opencode/big-pickle"
+}
